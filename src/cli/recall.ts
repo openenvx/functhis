@@ -1,4 +1,4 @@
-import { shapeEvidenceOutput } from '../mcp/output';
+import { shapeEvidenceOutput } from '../output';
 import { resolveConfigDir } from '../storage/paths';
 import { assertValidAddress, assertValidRunId } from '../trace/schema';
 import { loadTrace } from '../trace/store';

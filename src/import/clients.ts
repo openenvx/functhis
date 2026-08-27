@@ -1,9 +1,8 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 
 import * as z from 'zod/v4';
 
+import { discoverExistingClientPaths } from '../clients/paths';
 import type { UpstreamServer, UpstreamsConfig } from '../storage/config';
 
 const mcpStdioServerSchema = z.object({
@@ -128,84 +127,27 @@ function isFuncthisCommand(command: string | string[]): boolean {
   return parts[0] === 'fn' || parts.includes('functhis');
 }
 
-export function discoverCursorMcpPaths(
-  cwd = process.cwd()
-): ClientImportSource[] {
-  const paths: ClientImportSource[] = [];
-  const globalPath = join(homedir(), '.cursor', 'mcp.json');
-  const projectPath = join(cwd, '.cursor', 'mcp.json');
-
-  if (existsSync(globalPath)) {
-    paths.push({ client: 'cursor', path: globalPath, scope: 'global' });
-  }
-  if (existsSync(projectPath)) {
-    paths.push({ client: 'cursor', path: projectPath, scope: 'project' });
-  }
-  return paths;
-}
-
-export function discoverClaudeMcpPaths(
-  cwd = process.cwd()
-): ClientImportSource[] {
-  const paths: ClientImportSource[] = [];
-  const globalPath = join(homedir(), '.claude', 'mcp.json');
-  const projectPath = join(cwd, '.mcp.json');
-
-  if (existsSync(globalPath)) {
-    paths.push({ client: 'claude', path: globalPath, scope: 'global' });
-  }
-  if (existsSync(projectPath)) {
-    paths.push({ client: 'claude', path: projectPath, scope: 'project' });
-  }
-  return paths;
-}
-
-function discoverOpenCodeConfigPaths(
-  cwd = process.cwd()
-): ClientImportSource[] {
-  const paths: ClientImportSource[] = [];
-  const globalDir = join(homedir(), '.config', 'opencode');
-  const globalCandidates = [
-    join(globalDir, 'opencode.json'),
-    join(globalDir, 'opencode.jsonc'),
-  ];
-  for (const path of globalCandidates) {
-    if (existsSync(path)) {
-      paths.push({ client: 'opencode', path, scope: 'global' });
-      break;
-    }
-  }
-
-  const projectCandidates = [
-    join(cwd, 'opencode.json'),
-    join(cwd, 'opencode.jsonc'),
-    join(cwd, '.opencode', 'opencode.json'),
-    join(cwd, '.opencode', 'opencode.jsonc'),
-  ];
-  for (const path of projectCandidates) {
-    if (existsSync(path)) {
-      paths.push({ client: 'opencode', path, scope: 'project' });
-      break;
-    }
-  }
-  return paths;
+function toClientImportSource(
+  ref: ReturnType<typeof discoverExistingClientPaths>[number]
+): ClientImportSource {
+  return {
+    client: ref.client,
+    path: ref.path,
+    scope: ref.scope,
+  };
 }
 
 export function discoverAllImportSources(
   cwd = process.cwd()
 ): ClientImportSource[] {
-  return [
-    ...discoverCursorMcpPaths(cwd),
-    ...discoverClaudeMcpPaths(cwd),
-    ...discoverOpenCodeConfigPaths(cwd),
-  ];
+  return discoverExistingClientPaths(cwd).map(toClientImportSource);
 }
 
 export function loadMcpServersFile(
   path: string
 ): Record<string, z.infer<typeof mcpStdioServerSchema>> {
   const raw = readFileSync(path, 'utf-8');
-  const parsed = mcpServersFileSchema.parse(JSON.parse(raw));
+  const parsed = mcpServersFileSchema.parse(parseJsonc(raw));
   return parsed.mcpServers;
 }
 
@@ -416,7 +358,9 @@ export function importFromAllClients(cwd = process.cwd()): ClientImportResult {
 }
 
 export function importFromCursor(cwd = process.cwd()): ClientImportResult {
-  const sources = discoverCursorMcpPaths(cwd);
+  const sources = discoverExistingClientPaths(cwd)
+    .filter((ref) => ref.client === 'cursor')
+    .map(toClientImportSource);
   if (sources.length === 0) {
     throw new Error(
       'No Cursor MCP config found. Expected ~/.cursor/mcp.json or .cursor/mcp.json in the project.'

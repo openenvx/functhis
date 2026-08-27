@@ -16,6 +16,7 @@ export interface CompileOptions {
   description?: string;
   calls?: string[];
   sourceRunId: string;
+  catalog?: ToolCatalog;
 }
 
 function inferInputType(value: unknown): InputDeclaration['type'] {
@@ -32,14 +33,6 @@ function makeStepId(call: TraceCall, index: number): string {
   const base = call.toolId.split('.').pop() ?? `step_${index + 1}`;
   const sanitized = base.replaceAll(/[^a-z0-9_]/giu, '_').toLowerCase();
   return /^[a-z]/u.test(sanitized) ? sanitized : `step_${sanitized}`;
-}
-
-export interface CompileOptions {
-  name: string;
-  description?: string;
-  calls?: string[];
-  sourceRunId: string;
-  catalog?: ToolCatalog;
 }
 
 function resolveToolRisk(
@@ -283,8 +276,4 @@ export function compileTraceToFunction(
   return { definition, fixture };
 }
 
-export function getSuccessfulPath(trace: ExecutionTrace): string[] {
-  return trace.calls
-    .filter((call) => call.status === 'succeeded')
-    .map((call) => call.address);
-}
+export { getSuccessfulPath } from '../trace/path';

@@ -1,6 +1,6 @@
 import * as z from 'zod/v4';
 
-import { DEFAULT_MAX_OUTPUT_BYTES } from '../mcp/output';
+import { DEFAULT_MAX_OUTPUT_BYTES } from '../output';
 import { WHOLE_RUN_DEADLINE_MS } from '../trace/recorder';
 import { FUNCTION_NAME_PATTERN } from './paths';
 

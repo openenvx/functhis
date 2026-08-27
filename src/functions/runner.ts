@@ -1,6 +1,5 @@
 import type { ToolCatalog } from '../catalog/index';
-import { normalizeCallResult } from '../mcp/normalize';
-import { truncateCallResult } from '../mcp/output';
+import { shapeCallResult } from '../output';
 import { assertToolAllowed, isToolAllowed } from '../policy/access';
 import type { UpstreamManager } from '../upstream/manager';
 import { assertNoDrift, checkDrift } from './drift';
@@ -111,14 +110,13 @@ async function executeStep(
         signal: options.signal,
         timeoutMs: step.timeoutMs,
       });
-      const normalized = normalizeCallResult(rawResult);
-      const truncated = truncateCallResult(
-        normalized,
+      const shapedResult = shapeCallResult(
+        rawResult,
         definition.runtime.maxOutputBytes
       );
       const shaped = step.select
-        ? applyJmesPath(truncated.data, step.select)
-        : truncated.data;
+        ? applyJmesPath(shapedResult.output, step.select)
+        : shapedResult.output;
       budgets.totalBytes += estimateBytes(shaped);
       const maxTotal =
         definition.runtime.maxTotalOutputBytes ??

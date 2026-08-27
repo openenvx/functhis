@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { Command } from 'commander';
 
 import { formatDoctorReport, runDoctor } from './cli/doctor';
-import { runImportAll, runImportCursor } from './cli/import';
+import { runImportAll, runImportFromSources } from './cli/import';
 import { runInspect } from './cli/inspect';
 import { runRecall } from './cli/recall';
 import { runFunctionCommand } from './cli/run';
@@ -57,7 +57,7 @@ importCmd
       path: string,
       options: { dir?: string; merge?: boolean; dryRun?: boolean }
     ) => {
-      const result = await runImportCursor({
+      const result = await runImportFromSources({
         dir: options.dir,
         dryRun: options.dryRun,
         merge: options.merge,
@@ -77,7 +77,7 @@ importCmd
   .option('--dry-run', 'Print import plan without writing config')
   .action(
     async (options: { dir?: string; merge?: boolean; dryRun?: boolean }) => {
-      const result = await runImportCursor({
+      const result = await runImportFromSources({
         dir: options.dir,
         dryRun: options.dryRun,
         merge: options.merge,

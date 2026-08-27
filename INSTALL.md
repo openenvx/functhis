@@ -63,18 +63,18 @@ Or explicitly:
 
 **You do one manual step once:** restart the MCP client if `fn_search` is not in the tool list yet (Cursor: reload window or restart MCP servers).
 
-After that, **recording is automatic**. Every `fn_call` writes evidence to `.functhis/runs/` with compact pointer responses so large results do not bloat context.
+After that, **recording is automatic**. Every `fn_call` writes evidence to `.functhis/runs/` with compact pointer responses so large results do not bloat context. See [docs/MCP.md](docs/MCP.md) for envelope fields and how to use `fn_select`.
 
 ---
 
 ## 3. What you get without doing anything else
 
-| Behavior            | Default                                    |
-| ------------------- | ------------------------------------------ |
-| MCP schema tokens   | Compact meta-tools instead of full catalog |
-| Large tool results  | Pointer envelope + `fn_select` for fields  |
-| Evidence / traces   | Recorded on every `fn_call`                |
-| Compile to Function | **Only when you ask** (see below)          |
+| Behavior | Default |
+| --- | --- |
+| MCP schema tokens | Compact meta-tools instead of full catalog |
+| Large tool results | Pointer envelope + `fn_select` for fields ([contract](docs/MCP.md)) |
+| Evidence / traces | Recorded on every `fn_call` |
+| Compile to Function | **Only when you ask** (see below) |
 
 The agent should **not** call other MCP servers directly when Functhis is available — all MCP traffic goes through the gateway so it can be recorded and shaped.
 

@@ -2,7 +2,7 @@ import { join } from 'node:path';
 
 import { describe, expect, test } from 'vitest';
 
-import { estimateUtf8Bytes } from '../src/mcp/output';
+import { estimateUtf8Bytes } from '../src/output';
 import { saveConfig } from '../src/storage/config';
 import {
   parseToolText,

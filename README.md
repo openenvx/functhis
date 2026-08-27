@@ -39,21 +39,22 @@ Full paths for Cursor, Claude, Codex, and OpenCode: **[INSTALL.md](INSTALL.md)**
 
 ## Gateway tools (after bootstrap)
 
-| MCP tool                  | Purpose                                          |
-| ------------------------- | ------------------------------------------------ |
-| `fn_search`               | Search Functions first, then upstream catalog    |
-| `fn_describe`             | Load schemas for selected IDs only               |
-| `fn_call`                 | Invoke tool; returns pointer envelope when large |
-| `fn_select` / `fn_recall` | Read stored evidence with JMESPath / paging      |
-| `fn_stats`                | Labeled schema/result savings estimates          |
-| `fn_inspect`              | Review a captured run                            |
-| `fn_this`                 | Compile a run into a Function (on request)       |
-| `fn_test`                 | Replay fixture / drift check                     |
-| `<function-name>`         | Call a compiled Function directly                |
+| MCP tool | Purpose |
+| --- | --- |
+| `fn_search` | Search Functions first, then upstream catalog |
+| `fn_describe` | Load schemas for selected IDs only |
+| `fn_call` | Invoke tool; large results return a pointer envelope (see [docs/MCP.md](docs/MCP.md)) |
+| `fn_select` / `fn_recall` | Read stored evidence with JMESPath / paging |
+| `fn_stats` | Labeled schema/result savings estimates |
+| `fn_inspect` | Review a captured run |
+| `fn_this` | Compile a run into a Function (on request) |
+| `fn_test` | Replay fixture / drift check |
+| `<function-name>` | Call a compiled Function directly |
 
 ## More docs
 
 - [INSTALL.md](INSTALL.md) — skill-only install (start here)
+- [docs/MCP.md](docs/MCP.md) — pointer envelope contract and evidence read API
 - [docs/DEMO.md](docs/DEMO.md) — crystallization demo
 - [FUNCTHIS_ROADMAP.md](FUNCTHIS_ROADMAP.md) — product direction
 - [benchmarks/m1-discovery.md](benchmarks/m1-discovery.md) — token estimates (labeled)

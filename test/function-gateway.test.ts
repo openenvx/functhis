@@ -107,6 +107,15 @@ describe('function gateway', () => {
             expect(toolNames).toContain('fn_this');
             expect(toolNames).toContain('fn_test');
 
+            const lookupTool = listed.tools.find(
+              (tool) => tool.name === 'lookup-user-issues'
+            );
+            expect(lookupTool?.inputSchema).toMatchObject({
+              properties: expect.objectContaining({
+                full: expect.objectContaining({ type: 'boolean' }),
+              }),
+            });
+
             const searchResult = await client.callTool({
               arguments: { limit: 5, query: 'lookup user issues' },
               name: 'fn_search',
@@ -143,6 +152,24 @@ describe('function gateway', () => {
               result?: unknown;
             };
             expect(JSON.stringify(directPayload.result)).toContain(
+              'Deployment failed'
+            );
+
+            const directFullResult = await client.callTool({
+              arguments: {
+                full: true,
+                owner: 'openenvx',
+                repo: 'functhis',
+                userId: 'u2',
+              },
+              name: 'lookup-user-issues',
+            });
+            const directFullPayload = parseToolText(directFullResult) as {
+              result?: unknown;
+              truncated?: boolean;
+            };
+            expect(directFullPayload.truncated).toBe(false);
+            expect(JSON.stringify(directFullPayload.result)).toContain(
               'Deployment failed'
             );
 

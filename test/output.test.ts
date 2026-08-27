@@ -7,9 +7,9 @@ import {
   estimateUtf8Bytes,
   pageValue,
   shapeEvidenceOutput,
-} from '../src/mcp/output';
+} from '../src/output';
 
-describe('mcp output shaping', () => {
+describe('output shaping', () => {
   test('describes object and array shapes', () => {
     expect(describeValueShape({ a: 1, b: 2 })).toEqual({
       keys: ['a', 'b'],

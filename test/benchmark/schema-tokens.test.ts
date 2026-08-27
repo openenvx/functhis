@@ -10,7 +10,7 @@ import {
   buildResultEnvelope,
   estimateUtf8Bytes,
   estimateTokensFromBytes,
-} from '../../src/mcp/output';
+} from '../../src/output';
 import { findPackageRoot } from '../../src/paths';
 import { UpstreamManager } from '../../src/upstream/manager';
 import { testUpstreamConfig } from '../helpers';

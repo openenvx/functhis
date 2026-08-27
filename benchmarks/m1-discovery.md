@@ -24,6 +24,6 @@ Schema reduction: 98.1%
 
 | Step                | Median-ish (single run) |
 | ------------------- | ----------------------: |
-| fn_search           |                     0.8 |
+| fn_search           |                     0.9 |
 | fn_describe (3 ids) |                     0.0 |
-| fn_call             |                     4.1 |
+| fn_call             |                     3.4 |

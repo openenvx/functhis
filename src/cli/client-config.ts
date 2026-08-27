@@ -1,12 +1,16 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname } from 'node:path';
 
 import * as z from 'zod/v4';
 
+import { discoverWriteTargets } from '../clients/paths';
+import type { ClientConfigTarget, ClientTarget } from '../clients/paths';
 import { parseJsonc } from '../import/clients';
 import { backupFileIfExists } from './backup';
+
+export type { ClientConfigTarget, ClientTarget } from '../clients/paths';
+export { detectClient, discoverWriteTargets } from '../clients/paths';
 
 const mcpServerEntrySchema = z.object({
   args: z.array(z.string()).optional(),
@@ -30,146 +34,11 @@ const opencodeFileSchema = z.object({
   mcp: z.record(z.string(), z.unknown()).optional(),
 });
 
-export type ClientTarget = 'cursor' | 'claude' | 'opencode';
-
-export interface ClientConfigTarget {
-  label: string;
-  path: string;
-  scope: 'global' | 'project';
-}
-
-export function detectClient(cwd = process.cwd()): ClientTarget {
-  const home = homedir();
-  if (existsSync(join(cwd, '.cursor', 'mcp.json'))) {
-    return 'cursor';
-  }
-  if (existsSync(join(cwd, '.mcp.json'))) {
-    return 'claude';
-  }
-  if (
-    existsSync(join(cwd, 'opencode.json')) ||
-    existsSync(join(cwd, 'opencode.jsonc')) ||
-    existsSync(join(cwd, '.opencode', 'opencode.json')) ||
-    existsSync(join(cwd, '.opencode', 'opencode.jsonc'))
-  ) {
-    return 'opencode';
-  }
-  if (existsSync(join(home, '.cursor', 'mcp.json'))) {
-    return 'cursor';
-  }
-  if (existsSync(join(home, '.claude', 'mcp.json'))) {
-    return 'claude';
-  }
-  if (
-    existsSync(join(home, '.config', 'opencode', 'opencode.json')) ||
-    existsSync(join(home, '.config', 'opencode', 'opencode.jsonc'))
-  ) {
-    return 'opencode';
-  }
-  return 'cursor';
-}
-
 export function discoverClientConfigTargets(
   client: ClientTarget,
   cwd = process.cwd()
 ): ClientConfigTarget[] {
-  if (client === 'cursor') {
-    const targets: ClientConfigTarget[] = [];
-    const globalPath = join(homedir(), '.cursor', 'mcp.json');
-    const projectPath = join(cwd, '.cursor', 'mcp.json');
-    if (existsSync(globalPath)) {
-      targets.push({
-        label: 'Cursor global',
-        path: globalPath,
-        scope: 'global',
-      });
-    }
-    if (existsSync(projectPath)) {
-      targets.push({
-        label: 'Cursor project',
-        path: projectPath,
-        scope: 'project',
-      });
-    }
-    if (targets.length === 0) {
-      targets.push({
-        label: 'Cursor global',
-        path: globalPath,
-        scope: 'global',
-      });
-    }
-    return targets;
-  }
-
-  if (client === 'claude') {
-    const targets: ClientConfigTarget[] = [];
-    const claudeGlobal = join(homedir(), '.claude', 'mcp.json');
-    const claudeProject = join(cwd, '.mcp.json');
-    if (existsSync(claudeGlobal)) {
-      targets.push({
-        label: 'Claude global',
-        path: claudeGlobal,
-        scope: 'global',
-      });
-    }
-    if (existsSync(claudeProject)) {
-      targets.push({
-        label: 'Claude project',
-        path: claudeProject,
-        scope: 'project',
-      });
-    }
-    if (targets.length === 0) {
-      targets.push({
-        label: 'Claude global',
-        path: claudeGlobal,
-        scope: 'global',
-      });
-    }
-    return targets;
-  }
-
-  const targets: ClientConfigTarget[] = [];
-  const globalCandidates = [
-    join(homedir(), '.config', 'opencode', 'opencode.json'),
-    join(homedir(), '.config', 'opencode', 'opencode.jsonc'),
-  ];
-  for (const path of globalCandidates) {
-    if (existsSync(path)) {
-      targets.push({
-        label: 'OpenCode global',
-        path,
-        scope: 'global',
-      });
-      break;
-    }
-  }
-
-  const projectCandidates = [
-    join(cwd, 'opencode.json'),
-    join(cwd, 'opencode.jsonc'),
-    join(cwd, '.opencode', 'opencode.json'),
-    join(cwd, '.opencode', 'opencode.jsonc'),
-  ];
-  for (const path of projectCandidates) {
-    if (existsSync(path)) {
-      targets.push({
-        label: 'OpenCode project',
-        path,
-        scope: 'project',
-      });
-      break;
-    }
-  }
-
-  if (targets.length === 0) {
-    targets.push({
-      label: 'OpenCode global',
-      path: join(homedir(), '.config', 'opencode', 'opencode.jsonc'),
-      scope: 'global',
-    });
-  }
-  return targets;
+  return discoverWriteTargets(client, cwd);
 }
 
 export function getFuncthisMcpEntry(functionsDir?: string): {

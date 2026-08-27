@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { normalizeCallResult } from '../mcp/normalize';
-import { truncateCallResult } from '../mcp/output';
+import { shapeCallResult } from '../output';
 import { redactValue } from '../redaction/redact';
 import { resolveEvidenceRefs } from './refs';
 import { generateRunId, makeAddress, REDACTION_VERSION } from './schema';
@@ -218,11 +217,5 @@ export function prepareCallOutput(result: unknown): {
   truncated: boolean;
   originalBytes?: number;
 } {
-  const normalized = normalizeCallResult(result);
-  const truncated = truncateCallResult(normalized);
-  return {
-    originalBytes: truncated.originalBytes,
-    output: truncated.data,
-    truncated: truncated.truncated,
-  };
+  return shapeCallResult(result);
 }

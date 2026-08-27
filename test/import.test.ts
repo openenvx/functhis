@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { describe, expect, test } from 'vitest';
 
-import { runImportAll, runImportCursor } from '../src/cli/import';
+import { runImportAll, runImportFromSources } from '../src/cli/import';
 import {
   cursorServerToUpstream,
   importFromAllClients,
@@ -124,7 +124,7 @@ describe('client import', () => {
     const functhisDir = join(packageRoot, 'test', '.tmp-import', 'out');
     await mkdir(functhisDir, { recursive: true });
 
-    const result = await runImportCursor({
+    const result = await runImportFromSources({
       dir: functhisDir,
       sources: [
         {

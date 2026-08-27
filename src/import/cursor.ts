@@ -5,8 +5,6 @@ export {
   type CursorImportSource,
   cursorServerToUpstream,
   discoverAllImportSources,
-  discoverClaudeMcpPaths,
-  discoverCursorMcpPaths,
   formatImportReport,
   importFromAllClients,
   importFromCursor,

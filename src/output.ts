@@ -1,4 +1,5 @@
-import { applyJmesPath } from '../functions/select';
+import { applyJmesPath } from './functions/select';
+import { normalizeCallResult } from './mcp/normalize';
 
 /** Hard cap for trace storage — prevents unbounded disk growth. */
 export const DEFAULT_MAX_OUTPUT_BYTES = 256 * 1024;
@@ -121,6 +122,23 @@ export function truncateCallResult(
     maxBytes,
     originalBytes: truncated.originalBytes,
     truncated: true,
+  };
+}
+
+export function shapeCallResult(
+  result: unknown,
+  maxBytes = DEFAULT_MAX_OUTPUT_BYTES
+): {
+  output: unknown;
+  truncated: boolean;
+  originalBytes?: number;
+} {
+  const normalized = normalizeCallResult(result);
+  const truncated = truncateCallResult(normalized, maxBytes);
+  return {
+    originalBytes: truncated.originalBytes,
+    output: truncated.data,
+    truncated: truncated.truncated,
   };
 }
 

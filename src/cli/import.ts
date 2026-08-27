@@ -51,7 +51,7 @@ export async function runImportAll(options: {
   return writeImportResult(result, options);
 }
 
-export async function runImportCursor(options: {
+export async function runImportFromSources(options: {
   dir?: string;
   merge?: boolean;
   dryRun?: boolean;
@@ -63,3 +63,6 @@ export async function runImportCursor(options: {
     : importFromCursor(options.cwd ?? process.cwd());
   return writeImportResult(result, options);
 }
+
+/** @deprecated Use runImportFromSources */
+export const runImportCursor = runImportFromSources;
