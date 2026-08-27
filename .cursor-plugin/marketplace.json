@@ -1,0 +1,11 @@
+{
+  "name": "functhis",
+  "plugins": [
+    {
+      "name": "functhis",
+      "source": "./plugins/functhis",
+      "description": "Local MCP gateway discovery, trace capture, and Function replay skills.",
+      "install": "npm install -g functhis"
+    }
+  ]
+}

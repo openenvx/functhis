@@ -1,0 +1,63 @@
+{
+  "name": "functhis",
+  "version": "0.2.0",
+  "private": false,
+  "description": "Turn successful MCP agent work into portable, testable Functions.",
+  "homepage": "https://github.com/openenvx/functhis#readme",
+  "bugs": {
+    "url": "https://github.com/openenvx/functhis/issues"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/openenvx/functhis.git"
+  },
+  "bin": {
+    "fn": "dist/src/cli.js",
+    "functhis": "dist/src/cli.js"
+  },
+  "files": [
+    "dist",
+    "skills",
+    "README.md",
+    "INSTALL.md",
+    "LICENSE"
+  ],
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "check-types": "tsc --noEmit",
+    "dev": "tsx src/cli.ts",
+    "test": "vitest run",
+    "benchmark": "vitest run test/benchmark/schema-tokens.test.ts",
+    "verify-release": "bash scripts/verify-release.sh",
+    "e2e": "vitest run test/e2e-crystallize.test.ts test/real-servers.test.ts",
+    "check": "ultracite check",
+    "fix": "ultracite fix",
+    "lint": "ultracite check",
+    "prepublishOnly": "bun run check-types && bun run build",
+    "prepare": "bun x husky || true"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/client": "^2.0.0",
+    "@modelcontextprotocol/server": "^2.0.0",
+    "commander": "^14.0.0",
+    "jmespath": "^0.16.0",
+    "minisearch": "^7.1.2",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "gpt-tokenizer": "^2.9.0",
+    "husky": "^9.1.7",
+    "oxfmt": "^0.65.0",
+    "oxlint": "^1.80.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.8.3",
+    "ultracite": "7.10.6",
+    "vitest": "^4.1.11"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

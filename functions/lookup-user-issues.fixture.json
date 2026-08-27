@@ -1,0 +1,51 @@
+{
+  "assertions": {
+    "output": {
+      "issues": [{ "number": 42, "title": "Deployment failed on staging" }],
+      "owner": "openenvx",
+      "repo": "functhis",
+      "state": "open"
+    },
+    "stepStatuses": ["succeeded", "succeeded"]
+  },
+  "containsSecrets": false,
+  "input": {
+    "userId": "u1",
+    "owner": "openenvx",
+    "repo": "functhis"
+  },
+  "recordedCalls": [
+    {
+      "arguments": {
+        "userId": "u1"
+      },
+      "output": {
+        "name": "Ada Lovelace",
+        "role": "engineer",
+        "userId": "u1"
+      },
+      "status": "succeeded",
+      "stepId": "get_user",
+      "toolFingerprint": "7161c166abf08957",
+      "toolId": "readonly.get_user"
+    },
+    {
+      "arguments": {
+        "owner": "openenvx",
+        "prior": "@1",
+        "repo": "functhis"
+      },
+      "output": {
+        "issues": [{ "number": 42, "title": "Deployment failed on staging" }],
+        "owner": "openenvx",
+        "repo": "functhis",
+        "state": "open"
+      },
+      "status": "succeeded",
+      "stepId": "list_issues",
+      "toolFingerprint": "4a4f1d69e54f57ac",
+      "toolId": "readonly.list_issues"
+    }
+  ],
+  "version": 1
+}

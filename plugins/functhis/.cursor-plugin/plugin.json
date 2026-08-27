@@ -1,0 +1,15 @@
+{
+  "name": "functhis",
+  "displayName": "Functhis",
+  "description": "Functhis skills: MCP gateway, automatic recording, compile on request. See INSTALL.md.",
+  "version": "0.2.0",
+  "author": {
+    "name": "OpenEnvX",
+    "url": "https://github.com/openenvx/functhis"
+  },
+  "homepage": "https://github.com/openenvx/functhis",
+  "repository": "https://github.com/openenvx/functhis",
+  "license": "Apache-2.0",
+  "keywords": ["functhis", "mcp", "functions", "gateway"],
+  "skills": "./skills/"
+}

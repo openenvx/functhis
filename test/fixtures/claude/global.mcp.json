@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "claude-tool": {
+      "command": "npx",
+      "args": ["-y", "claude-mcp-demo"]
+    }
+  }
+}

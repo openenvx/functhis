@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "shared": {
+      "command": "global-cmd",
+      "args": []
+    },
+    "globalOnly": {
+      "command": "global-only",
+      "args": []
+    }
+  }
+}

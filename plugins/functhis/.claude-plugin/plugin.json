@@ -1,0 +1,10 @@
+{
+  "name": "functhis",
+  "version": "0.2.0",
+  "description": "Functhis skills for MCP discovery, trace capture, and Function replay.",
+  "author": {
+    "name": "OpenEnvX"
+  },
+  "homepage": "https://github.com/openenvx/functhis",
+  "license": "Apache-2.0"
+}

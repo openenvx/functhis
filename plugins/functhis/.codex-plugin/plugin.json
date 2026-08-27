@@ -1,0 +1,21 @@
+{
+  "name": "functhis",
+  "version": "0.2.0",
+  "description": "Functhis skills for MCP discovery, trace capture, and Function replay.",
+  "author": {
+    "name": "OpenEnvX",
+    "url": "https://github.com/openenvx/functhis"
+  },
+  "homepage": "https://github.com/openenvx/functhis",
+  "repository": "https://github.com/openenvx/functhis",
+  "license": "Apache-2.0",
+  "keywords": ["functhis", "mcp", "functions", "gateway"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Functhis",
+    "shortDescription": "Local MCP gateway and Function replay skills.",
+    "developerName": "OpenEnvX",
+    "category": "Productivity",
+    "websiteURL": "https://github.com/openenvx/functhis"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "functhis",
+  "interface": {
+    "displayName": "Functhis Skills"
+  },
+  "plugins": [
+    {
+      "name": "functhis",
+      "source": {
+        "source": "local",
+        "path": "./plugins/functhis"
+      },
+      "description": "Local MCP gateway discovery, trace capture, and Function replay skills. Install CLI: npm install -g functhis",
+      "default": true,
+      "policy": {
+        "installation": "AVAILABLE",
+        "products": ["CODEX"]
+      },
+      "category": "Productivity"
+    }
+  ]
+}

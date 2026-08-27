@@ -1,0 +1,29 @@
+name: Install failure
+description: Report a clean-machine install or setup problem
+title: '[install] '
+labels: ['install']
+body:
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include OS, Node version, and install method (npm global, npx, tarball)
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Output from fn doctor
+      description: Run `fn doctor` and paste the output (redact secrets)

@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "shared": {
+      "command": "project-cmd",
+      "args": []
+    },
+    "projectOnly": {
+      "command": "project-only",
+      "args": []
+    }
+  }
+}
