@@ -30,6 +30,9 @@
     "dev": "tsx src/cli.ts",
     "test": "vitest run",
     "benchmark": "vitest run test/benchmark/schema-tokens.test.ts",
+    "benchmark:llm": "bun scripts/benchmark-llm.ts",
+    "benchmark:llm:quick": "bun scripts/benchmark-llm.ts -- --quick",
+    "benchmark:sync-functions": "bun scripts/benchmark/sync-functions.ts",
     "verify-release": "bash scripts/verify-release.sh",
     "e2e": "vitest run test/e2e-crystallize.test.ts test/real-servers.test.ts",
     "check": "ultracite check",
@@ -47,6 +50,7 @@
     "zod": "^4.0.0"
   },
   "devDependencies": {
+    "@cursor/sdk": "^1.0.29",
     "@types/node": "^24.3.0",
     "gpt-tokenizer": "^2.9.0",
     "husky": "^9.1.7",

@@ -56,6 +56,6 @@ Environment values are references only — Functhis passes them to child process
 
 ## What this demo does not prove
 
-- Provider-reported full-task token savings (see [benchmarks/m1-discovery.md](../benchmarks/m1-discovery.md))
+- Provider-reported full-task token savings (run [docs/BENCHMARK.md](./BENCHMARK.md); schema-only estimates in [benchmarks/m1-discovery.md](../benchmarks/m1-discovery.md))
 - Correctness vs direct MCP exposure at scale
 - Write/mutation workflows (read-only policy only in the public demo)

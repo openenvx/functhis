@@ -26,4 +26,4 @@ Schema reduction: 98.1%
 | ------------------- | ----------------------: |
 | fn_search           |                     0.9 |
 | fn_describe (3 ids) |                     0.0 |
-| fn_call             |                     3.4 |
+| fn_call             |                     4.0 |

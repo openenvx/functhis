@@ -57,7 +57,8 @@ Full paths for Cursor, Claude, Codex, and OpenCode: **[INSTALL.md](INSTALL.md)**
 - [docs/MCP.md](docs/MCP.md) — pointer envelope contract and evidence read API
 - [docs/DEMO.md](docs/DEMO.md) — crystallization demo
 - [FUNCTHIS_ROADMAP.md](FUNCTHIS_ROADMAP.md) — product direction
-- [benchmarks/m1-discovery.md](benchmarks/m1-discovery.md) — token estimates (labeled)
+- [benchmarks/m1-discovery.md](benchmarks/m1-discovery.md) — schema token estimates (labeled)
+- [docs/BENCHMARK.md](docs/BENCHMARK.md) — FnBench wrap suite (Cursor SDK, provider usage)
 
 ## CLI (Skill internal)
 
