@@ -14,7 +14,7 @@ export interface StatsSummary {
   timeoutCalls: number;
   truncatedCalls: number;
   totalDurationMs: number;
-  functionCalls: number;
+  packageCalls: number;
   upstreamCalls: number;
   storedResultBytes: number;
   returnedResultBytes: number;
@@ -27,7 +27,7 @@ export interface GatewayStats extends StatsSummary {
   directSchemaTokensEstimate: number;
   discoverySchemaTokensEstimate: number;
   estimatedSchemaTokensSaved: number;
-  functionCount: number;
+  packageCount: number;
   labels: {
     resultBytes: 'estimated';
     schemaTokens: 'estimated';
@@ -41,7 +41,7 @@ export async function computeStats(configDir: string): Promise<StatsSummary> {
     deniedCalls: 0,
     estimatedResultBytesSaved: 0,
     failedCalls: 0,
-    functionCalls: 0,
+    packageCalls: 0,
     returnedResultBytes: 0,
     runCount: traces.length,
     storedResultBytes: 0,
@@ -83,7 +83,7 @@ export async function computeStats(configDir: string): Promise<StatsSummary> {
           call.storedBytes - call.returnedBytes;
       }
       if (call.toolFingerprint === 'function') {
-        summary.functionCalls += 1;
+        summary.packageCalls += 1;
       } else if (call.status === 'succeeded' || call.status === 'failed') {
         summary.upstreamCalls += 1;
       }
@@ -107,7 +107,7 @@ export async function computeGatewayStats(
   configDir: string,
   options: {
     catalogToolCount: number;
-    functionCount: number;
+    packageCount: number;
     catalogTools?: {
       name: string;
       description?: string;
@@ -119,7 +119,7 @@ export async function computeGatewayStats(
   const directSchemaTokensEstimate = options.catalogTools
     ? encode(JSON.stringify(options.catalogTools)).length
     : estimateDirectSchemaTokens(
-        options.catalogToolCount + options.functionCount
+        options.catalogToolCount + options.packageCount
       );
   const discoverySchemaTokensEstimate = META_TOOL_SCHEMA_TOKENS_ESTIMATE;
   const estimatedSchemaTokensSaved = Math.max(
@@ -134,10 +134,10 @@ export async function computeGatewayStats(
     directSchemaTokensEstimate,
     discoverySchemaTokensEstimate,
     estimatedSchemaTokensSaved,
-    functionCount: options.functionCount,
     labels: {
       resultBytes: 'estimated',
       schemaTokens: 'estimated',
     },
+    packageCount: options.packageCount,
   };
 }

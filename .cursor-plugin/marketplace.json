@@ -4,7 +4,7 @@
     {
       "name": "functhis",
       "source": "./plugins/functhis",
-      "description": "Local MCP gateway discovery, trace capture, and Function replay skills.",
+      "description": "Local MCP gateway, sandbox TypeScript, and function package skills.",
       "install": "npm install -g functhis"
     }
   ]

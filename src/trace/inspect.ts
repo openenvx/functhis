@@ -1,4 +1,3 @@
-import { getSuccessfulPath } from './path';
 import { assertValidRunId } from './schema';
 import { loadTrace } from './store';
 
@@ -43,11 +42,6 @@ export async function formatInspectReport(
         `  truncated: yes (${call.originalBytes ?? '?'} bytes original)`
       );
     }
-  }
-
-  const successfulPath = getSuccessfulPath(trace);
-  if (successfulPath.length > 0) {
-    lines.push('', `Successful path: ${successfulPath.join(', ')}`);
   }
 
   return lines.join('\n');

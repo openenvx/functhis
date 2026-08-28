@@ -9,11 +9,8 @@ import { runImportAll, runImportFromSources } from './cli/import';
 import { formatIndexReport, runIndex } from './cli/index-cmd';
 import { runInspect } from './cli/inspect';
 import { runRecall } from './cli/recall';
-import { runFunctionCommand } from './cli/run';
 import { formatSetupReport, runSetup } from './cli/setup';
 import { runStats } from './cli/stats';
-import { runTestWithExitCode } from './cli/test';
-import { formatThisReport, runThis } from './cli/this';
 import { startGateway } from './mcp/gateway';
 import { findPackageRoot } from './paths';
 
@@ -25,7 +22,7 @@ const program = new Command();
 
 program
   .name('fn')
-  .description('Functhis — local MCP gateway for tool discovery and replay')
+  .description('Functhis — local MCP gateway with sandbox packages')
   .version(packageJson.version);
 
 const importCmd = program
@@ -97,8 +94,8 @@ program
   .option('--dry-run', 'Print planned changes without writing files')
   .option('--force', 'Overwrite existing config (creates a backup first)')
   .option(
-    '--functions-dir <path>',
-    'Functions directory for client MCP snippet (default: ./functions)'
+    '--packages-dir <path>',
+    'Packages directory for client MCP snippet (default: ./packages)'
   )
   .option(
     '--write-client <target>',
@@ -109,7 +106,7 @@ program
       dir?: string;
       dryRun?: boolean;
       force?: boolean;
-      functionsDir?: string;
+      packagesDir?: string;
       writeClient?: string;
     }) => {
       const writeClient = options.writeClient
@@ -130,7 +127,7 @@ program
         dir: options.dir,
         dryRun: options.dryRun,
         force: options.force,
-        functionsDir: options.functionsDir,
+        packagesDir: options.packagesDir,
         writeClient,
       });
       console.log(formatSetupReport(result));
@@ -167,11 +164,8 @@ program
   .command('doctor')
   .description('Validate config and test upstream MCP connections')
   .option('--dir <path>', 'Config directory')
-  .option(
-    '--functions-dir <path>',
-    'Functions directory (default: ./functions)'
-  )
-  .action(async (options: { dir?: string; functionsDir?: string }) => {
+  .option('--packages-dir <path>', 'Packages directory (default: ./packages)')
+  .action(async (options: { dir?: string; packagesDir?: string }) => {
     const result = await runDoctor(options);
     console.log(formatDoctorReport(result));
     if (!result.ok) {
@@ -181,18 +175,13 @@ program
 
 program
   .command('serve')
-  .description(
-    'Start the stdio MCP gateway (meta-tools plus compiled Functions)'
-  )
+  .description('Start the stdio MCP gateway (meta-tools plus saved packages)')
   .option('--config <path>', 'Path to upstreams.json')
-  .option(
-    '--functions-dir <path>',
-    'Functions directory (default: ./functions)'
-  )
-  .action(async (options: { config?: string; functionsDir?: string }) => {
+  .option('--packages-dir <path>', 'Packages directory (default: ./packages)')
+  .action(async (options: { config?: string; packagesDir?: string }) => {
     await startGateway({
       configPath: options.config,
-      functionsDir: options.functionsDir,
+      packagesDir: options.packagesDir,
     });
   });
 
@@ -221,109 +210,6 @@ program
   .action(async (options: { dir?: string }) => {
     console.log(await runStats(options));
   });
-
-program
-  .command('this <run-id>')
-  .description('Compile a successful run into a Function draft')
-  .requiredOption('--name <name>', 'Function name (lowercase, hyphens allowed)')
-  .option('--dir <path>', 'Config directory')
-  .option(
-    '--functions-dir <path>',
-    'Functions directory (default: ./functions)'
-  )
-  .option(
-    '--calls <addresses>',
-    'Comma-separated evidence addresses to compile (default: all succeeded calls)'
-  )
-  .option('--description <text>', 'Function description')
-  .option('--force', 'Overwrite existing function files')
-  .action(
-    async (
-      runId: string,
-      options: {
-        name: string;
-        dir?: string;
-        functionsDir?: string;
-        calls?: string;
-        description?: string;
-        force?: boolean;
-      }
-    ) => {
-      const calls = options.calls
-        ?.split(',')
-        .map((entry) => entry.trim())
-        .filter((entry) => entry.length > 0);
-      const result = await runThis({
-        calls,
-        description: options.description,
-        dir: options.dir,
-        force: options.force,
-        functionsDir: options.functionsDir,
-        name: options.name,
-        runId,
-      });
-      console.log(formatThisReport(result));
-    }
-  );
-
-program
-  .command('test <name>')
-  .description('Run a Function against its fixture')
-  .option('--dir <path>', 'Config directory')
-  .option(
-    '--functions-dir <path>',
-    'Functions directory (default: ./functions)'
-  )
-  .option('--repeat <n>', 'Repeat count', (value) => Math.trunc(Number(value)))
-  .action(
-    async (
-      name: string,
-      options: { dir?: string; functionsDir?: string; repeat?: number }
-    ) => {
-      const { ok, output } = await runTestWithExitCode({
-        dir: options.dir,
-        functionsDir: options.functionsDir,
-        name,
-        repeat: options.repeat,
-      });
-      console.log(output);
-      if (!ok) {
-        process.exitCode = 1;
-      }
-    }
-  );
-
-program
-  .command('run <name>')
-  .description('Replay a Function with fresh input')
-  .requiredOption('--input <json>', 'JSON object input')
-  .option('--approve-writes', 'Allow Functions with writes: review-required')
-  .option('--dir <path>', 'Config directory')
-  .option(
-    '--functions-dir <path>',
-    'Functions directory (default: ./functions)'
-  )
-  .action(
-    async (
-      name: string,
-      options: {
-        input: string;
-        approveWrites?: boolean;
-        dir?: string;
-        functionsDir?: string;
-      }
-    ) => {
-      console.log(
-        await runFunctionCommand({
-          approveWrites: options.approveWrites,
-          dir: options.dir,
-          functionsDir: options.functionsDir,
-          input: options.input,
-          name,
-        })
-      );
-    }
-  );
 
 try {
   await program.parseAsync(process.argv);

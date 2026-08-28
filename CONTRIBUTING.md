@@ -28,14 +28,13 @@ Use `bun run fix` to auto-format when needed.
 ## Project boundaries
 
 - Local open source first: no Cloud, accounts, or telemetry in core PRs
-- Functions must remain reviewable data that call declared MCP tools only
-- No arbitrary model-supplied code execution in local mode
+- Saved packages run in the sandbox with an explicit upstream tool allowlist
+- No arbitrary model-supplied code execution outside the sandbox
 - Prefer tests with fake MCP servers under `fixtures/servers/`
 
 ## Pull requests
 
 - Keep changes focused
-- Update `CHANGELOG.md` for user-visible changes
 - Add or update tests for behavior changes
 
 ## Security

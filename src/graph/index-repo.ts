@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, statSync,readdirSync } from 'node:fs';
+import { existsSync, readFileSync, statSync, readdirSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 
 import { Project, SyntaxKind } from 'ts-morph';
@@ -123,7 +123,7 @@ function indexImports(
   fileId: string,
   relPath: string,
   root: string,
-  now: number
+  _now: number
 ): void {
   for (const decl of sourceFile.getImportDeclarations()) {
     const specifier = decl.getModuleSpecifierValue();

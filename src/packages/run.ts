@@ -1,8 +1,7 @@
-import type { GraphStore } from '../graph/store';
-import type { UpstreamManager } from '../upstream/manager';
 import { CapabilityBroker } from '../sandbox/broker';
-import { executeSandboxCode } from '../sandbox/runner';
 import type { SandboxExecuteResult } from '../sandbox/protocol';
+import { executeSandboxCode } from '../sandbox/runner';
+import type { UpstreamManager } from '../upstream/manager';
 import { inspectLockDrift } from './install';
 import { loadPackage } from './save';
 import type { PackageManifest } from './schema';
@@ -11,13 +10,11 @@ export interface RunPackageOptions {
   approveWrites?: boolean;
   input?: Record<string, unknown>;
   packageDir: string;
-  repoRoot?: string;
   signal?: AbortSignal;
 }
 
 export async function runPackage(
   manager: UpstreamManager,
-  graphStore: GraphStore | undefined,
   options: RunPackageOptions
 ): Promise<SandboxExecuteResult & { manifest: PackageManifest }> {
   const { manifest, lock, source } = await loadPackage(options.packageDir);
@@ -35,11 +32,8 @@ export async function runPackage(
   const broker = new CapabilityBroker(manager, {
     allowedTools: manifest.capabilities.tools,
     approveWrites: options.approveWrites,
-    graphStore,
     maxBytesPerResult: 256 * 1024,
     maxCalls: manifest.runtime.maxCalls,
-    repoRead: manifest.capabilities.repo === 'read',
-    repoRoot: options.repoRoot,
     signal: options.signal,
   });
 
@@ -49,7 +43,6 @@ export async function runPackage(
     input: options.input,
     maxCalls: manifest.runtime.maxCalls,
     maxOutputBytes: manifest.runtime.maxOutputBytes,
-    repoRead: manifest.capabilities.repo === 'read',
     source,
     timeoutMs: manifest.runtime.timeoutMs,
   });

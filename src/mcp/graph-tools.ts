@@ -1,16 +1,16 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 
+import { buildResultEnvelope } from '../output';
 import {
   formatInspectReport,
   installPackageFromPath,
 } from '../packages/install';
 import { runPackage } from '../packages/run';
 import { savePackage } from '../packages/save';
-import { buildResultEnvelope } from '../output';
 import { CapabilityBroker } from '../sandbox/broker';
 import { executeSandboxCode } from '../sandbox/runner';
-import type { GatewayDependencies } from './function-tools';
+import type { GatewayDependencies } from './package-tools';
 
 export function registerGraphAndSandboxTools(
   server: McpServer,
@@ -42,7 +42,12 @@ export function registerGraphAndSandboxTools(
       });
       if (!report) {
         return {
-          content: [{ text: JSON.stringify({ error: 'Graph not available' }), type: 'text' as const }],
+          content: [
+            {
+              text: JSON.stringify({ error: 'Graph not available' }),
+              type: 'text' as const,
+            },
+          ],
           isError: true,
         };
       }
@@ -70,7 +75,12 @@ export function registerGraphAndSandboxTools(
     async ({ query, limit }) => {
       if (!deps.graph) {
         return {
-          content: [{ text: JSON.stringify({ error: 'Graph not available' }), type: 'text' as const }],
+          content: [
+            {
+              text: JSON.stringify({ error: 'Graph not available' }),
+              type: 'text' as const,
+            },
+          ],
           isError: true,
         };
       }
@@ -98,7 +108,12 @@ export function registerGraphAndSandboxTools(
     async ({ ids }) => {
       if (!deps.graph) {
         return {
-          content: [{ text: JSON.stringify({ error: 'Graph not available' }), type: 'text' as const }],
+          content: [
+            {
+              text: JSON.stringify({ error: 'Graph not available' }),
+              type: 'text' as const,
+            },
+          ],
           isError: true,
         };
       }
@@ -129,7 +144,6 @@ export function registerGraphAndSandboxTools(
         input: z.record(z.string(), z.unknown()).optional(),
         maxCalls: z.number().int().positive().optional(),
         maxOutputBytes: z.number().int().positive().optional(),
-        repoRead: z.boolean().optional(),
         source: z
           .string()
           .describe('TypeScript with export default async function'),
@@ -144,14 +158,11 @@ export function registerGraphAndSandboxTools(
       maxCalls,
       maxOutputBytes,
       approveWrites,
-      repoRead,
     }) => {
       const broker = new CapabilityBroker(deps.manager, {
         allowedTools,
         approveWrites,
-        graphStore: deps.graph?.store,
         maxCalls,
-        repoRead,
       });
 
       const result = await executeSandboxCode(broker, {
@@ -160,7 +171,6 @@ export function registerGraphAndSandboxTools(
         input,
         maxCalls,
         maxOutputBytes,
-        repoRead,
         source,
         timeoutMs,
       });
@@ -199,28 +209,19 @@ export function registerGraphAndSandboxTools(
         description: z.string(),
         inputSchema: z.record(z.string(), z.unknown()).optional(),
         name: z.string(),
-        repoRead: z.boolean().optional(),
         source: z.string(),
       }),
     },
-    async ({
-      source,
-      name,
-      description,
-      allowedTools,
-      inputSchema,
-      repoRead,
-    }) => {
+    async ({ source, name, description, allowedTools, inputSchema }) => {
       const packageDir = await savePackage(deps.manager, {
         allowedTools,
         description,
-        functionsRoot: deps.functionsDir,
         inputSchema,
         name,
-        repoRead,
+        packagesRoot: deps.packagesDir,
         source,
       });
-      await deps.packageLibrary?.reload(deps.functionsDir);
+      await deps.packageLibrary.reload(deps.packagesDir);
       return {
         content: [
           {
@@ -245,12 +246,10 @@ export function registerGraphAndSandboxTools(
       }),
     },
     async ({ path, approve }) => {
-      const installed = await installPackageFromPath(
-        path,
-        deps.functionsDir,
-        { approve }
-      );
-      await deps.packageLibrary?.reload(deps.functionsDir);
+      const installed = await installPackageFromPath(path, deps.packagesDir, {
+        approve,
+      });
+      await deps.packageLibrary.reload(deps.packagesDir);
       return {
         content: [
           {
@@ -274,7 +273,7 @@ export function registerGraphAndSandboxTools(
     },
     async ({ name, path }) => {
       const packageDir =
-        path ?? (name ? `${deps.functionsDir}/${name}` : undefined);
+        path ?? (name ? `${deps.packagesDir}/${name}` : undefined);
       if (!packageDir) {
         return {
           content: [
@@ -299,7 +298,7 @@ export async function invokePackageFunction(
   args: Record<string, unknown>,
   deps: GatewayDependencies
 ) {
-  const result = await runPackage(deps.manager, deps.graph?.store, {
+  const result = await runPackage(deps.manager, {
     input: args,
     packageDir,
     signal: deps.abortSignal,

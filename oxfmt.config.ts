@@ -3,6 +3,5 @@ import ultracite from 'ultracite/oxfmt';
 
 export default defineConfig({
   ...ultracite,
-  ignorePatterns: ['functions/**/*.ts'],
   singleQuote: true,
 });

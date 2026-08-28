@@ -1,37 +1,42 @@
-import { dirname } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
 import { McpServer } from '@modelcontextprotocol/server';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 
-import { FunctionLibrary } from '../functions/library';
-import { getFunctionsDir } from '../functions/paths';
 import { GraphService } from '../graph/service';
 import { PackageLibrary } from '../packages/library';
+import { getPackagesDir } from '../packages/paths';
+import { findPackageRoot } from '../paths';
 import { loadConfig } from '../storage/config';
 import { getConfigPath } from '../storage/paths';
 import { TraceRecorder } from '../trace/recorder';
 import { UpstreamManager } from '../upstream/manager';
-import { registerFunctionTools } from './function-tools';
-import type { GatewayDependencies } from './function-tools';
 import { registerGraphAndSandboxTools } from './graph-tools';
 import { registerMetaTools } from './meta-tools';
+import { registerPackageTools } from './package-tools';
+import type { GatewayDependencies } from './package-tools';
 
-export type { GatewayDependencies } from './function-tools';
+export type { GatewayDependencies } from './package-tools';
+
+const packageJson = JSON.parse(
+  readFileSync(join(findPackageRoot(import.meta.url), 'package.json'), 'utf-8')
+) as { version: string };
 
 export interface StartGatewayOptions {
   configPath?: string;
-  functionsDir?: string;
+  packagesDir?: string;
 }
 
 export function createGatewayServer(deps: GatewayDependencies): McpServer {
   const server = new McpServer({
     name: 'functhis',
-    version: '0.1.0',
+    version: packageJson.version,
   });
 
   registerMetaTools(server, deps);
   registerGraphAndSandboxTools(server, deps);
-  registerFunctionTools(server, deps);
+  registerPackageTools(server, deps);
 
   return server;
 }
@@ -47,12 +52,11 @@ export async function startGateway(
   const config = await loadConfig(path);
   const manager = new UpstreamManager();
   const recorder = new TraceRecorder(configDir);
-  const functionsRoot = getFunctionsDir(
+  const packagesRoot = getPackagesDir(
     process.cwd(),
-    resolvedOptions.functionsDir
+    resolvedOptions.packagesDir
   );
-  const library = await FunctionLibrary.load(functionsRoot);
-  const packageLibrary = await PackageLibrary.load(functionsRoot);
+  const packageLibrary = await PackageLibrary.load(packagesRoot);
   const graph = new GraphService(configDir);
 
   if (graph.needsIndex()) {
@@ -80,12 +84,11 @@ export async function startGateway(
   const server = createGatewayServer({
     abortSignal: abortController.signal,
     configDir,
-    functionsDir: functionsRoot,
     graph,
-    library,
     manager,
-    recorder,
     packageLibrary,
+    packagesDir: packagesRoot,
+    recorder,
   });
   const transport = new StdioServerTransport();
   await server.connect(transport);

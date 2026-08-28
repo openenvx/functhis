@@ -1,11 +1,18 @@
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, expect, test } from 'vitest';
 
 import { runDoctor } from '../src/cli/doctor';
 import { runSetup } from '../src/cli/setup';
+import { findPackageRoot } from '../src/paths';
 import { saveConfig } from '../src/storage/config';
 import { runCli, testUpstreamConfig, withTempConfigDir } from './helpers';
+
+const packageRoot = findPackageRoot(import.meta.url);
+const packageJson = JSON.parse(
+  readFileSync(join(packageRoot, 'package.json'), 'utf-8')
+) as { version: string };
 
 describe('fn CLI', () => {
   test('prints help', async () => {
@@ -19,7 +26,7 @@ describe('fn CLI', () => {
   test('prints version', async () => {
     const { stdout, exitCode } = await runCli(['--version']);
     expect(exitCode).toBe(0);
-    expect(stdout.trim()).toBe('0.2.0');
+    expect(stdout.trim()).toBe(packageJson.version);
   });
 
   test('setup writes config', async () => {
@@ -72,7 +79,7 @@ describe('fn doctor', () => {
       const result = await runDoctor({ dir });
       expect(result.ok).toBe(true);
       expect(result.totalTools).toBeGreaterThanOrEqual(100);
-      expect(result.environment.packageVersion).toBe('0.2.0');
+      expect(result.environment.packageVersion).toBe(packageJson.version);
       expect(result.environment.nodeVersion).toMatch(/^v\d+/);
       const catalog = result.upstreams.find((u) => u.id === 'catalog');
       expect(catalog?.toolCount).toBeGreaterThanOrEqual(100);

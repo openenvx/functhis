@@ -1,19 +1,12 @@
-import { join } from 'node:path';
-
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 
-import { crystallizeRun } from '../functions/crystallize';
-import { isFunctionToolId } from '../functions/library';
-import type { FunctionSearchHit } from '../functions/library';
-import { runFunctionTest } from '../functions/test';
 import { resolvePackageDir } from '../packages/install';
+import { isPackageToolId } from '../packages/paths';
 import { assertToolAllowed } from '../policy/access';
 import { formatInspectReport } from '../trace/inspect';
 import { prepareCallOutput } from '../trace/recorder';
 import { computeGatewayStats } from '../trace/stats';
-import { describeFunction, invokeFunction } from './function-tools';
-import type { GatewayDependencies } from './function-tools';
 import { invokePackageFunction } from './graph-tools';
 import {
   buildCallResponse,
@@ -21,6 +14,7 @@ import {
   recordGatewayCallAndEnvelope,
   respondWithStoredEvidence,
 } from './invoke';
+import type { GatewayDependencies } from './package-tools';
 
 export function registerMetaTools(
   server: McpServer,
@@ -30,7 +24,7 @@ export function registerMetaTools(
     'fn_search',
     {
       description:
-        'Search compiled Functions first, then the local MCP tool catalog. Returns compact hits without full schemas.',
+        'Search saved function packages first, then the local MCP tool catalog. Returns compact hits without full schemas.',
       inputSchema: z.object({
         limit: z
           .number()
@@ -44,17 +38,11 @@ export function registerMetaTools(
     },
     async ({ query, limit }) => {
       const max = limit ?? 10;
-      const packageHits =
-        deps.packageLibrary?.search(query, max).map((hit) => ({
-          ...hit,
-          kind: 'package' as const,
-        })) ?? [];
-      const remainingAfterPackages = Math.max(0, max - packageHits.length);
-      const functionHits: FunctionSearchHit[] = deps.library.search(
-        query,
-        remainingAfterPackages
-      );
-      const remaining = Math.max(0, remainingAfterPackages - functionHits.length);
+      const packageHits = deps.packageLibrary.search(query, max).map((hit) => ({
+        ...hit,
+        kind: 'package' as const,
+      }));
+      const remaining = Math.max(0, max - packageHits.length);
       const graphToolHits =
         remaining > 0 && deps.graph
           ? deps.graph
@@ -74,15 +62,9 @@ export function registerMetaTools(
           {
             text: JSON.stringify(
               {
-                hits: [
-                  ...packageHits,
-                  ...functionHits,
-                  ...graphToolHits,
-                  ...catalogHits,
-                ],
+                hits: [...packageHits, ...graphToolHits, ...catalogHits],
                 totalCatalog: deps.manager.catalog.size(),
-                totalFunctions:
-                  deps.library.size() + (deps.packageLibrary?.size() ?? 0),
+                totalPackages: deps.packageLibrary.size(),
               },
               null,
               2
@@ -98,23 +80,30 @@ export function registerMetaTools(
     'fn_describe',
     {
       description:
-        'Load full input schemas for Function names or namespaced upstream tool ids.',
+        'Load full input schemas for saved package names or namespaced upstream tool ids.',
       inputSchema: z.object({
         ids: z
           .array(z.string())
           .min(1)
           .max(20)
-          .describe('Function names or namespaced tool ids'),
+          .describe('Package names or namespaced tool ids'),
       }),
     },
     async ({ ids }) => {
       const tools = ids.map((id) => {
-        if (isFunctionToolId(id)) {
-          const definition = deps.library.get(id);
-          if (!definition) {
+        if (isPackageToolId(id)) {
+          const pkg = deps.packageLibrary.get(id);
+          if (!pkg) {
             return { error: 'not found', id };
           }
-          return describeFunction(definition);
+          return {
+            description: pkg.manifest.description,
+            id: pkg.manifest.name,
+            inputSchema: pkg.manifest.inputSchema,
+            kind: 'package' as const,
+            name: pkg.manifest.name,
+            requiredTools: pkg.manifest.capabilities.tools,
+          };
         }
 
         const tool = deps.manager.catalog.getTool(id);
@@ -147,7 +136,7 @@ export function registerMetaTools(
     'fn_call',
     {
       description:
-        'Invoke a compiled Function by name or an upstream MCP tool by namespaced id. Returns a compact pointer envelope for large results; use fn_recall with select to read fields.',
+        'Invoke a saved package by name or an upstream MCP tool by namespaced id. Returns a compact pointer envelope for large results; use fn_recall with select to read fields.',
       inputSchema: z.object({
         arguments: z
           .record(z.string(), z.unknown())
@@ -163,7 +152,7 @@ export function registerMetaTools(
           ),
         id: z
           .string()
-          .describe('Function name or namespaced tool id (serverId.toolName)'),
+          .describe('Package name or namespaced tool id (serverId.toolName)'),
         newRun: z
           .boolean()
           .optional()
@@ -174,24 +163,13 @@ export function registerMetaTools(
     async ({ id, arguments: toolArgs, runId, newRun, full }) => {
       const rawArgs = (toolArgs ?? {}) as Record<string, unknown>;
 
-      if (isFunctionToolId(id)) {
-        const packageDir = deps.packageLibrary
-          ? await resolvePackageDir(deps.functionsDir, id)
-          : undefined;
+      if (isPackageToolId(id)) {
+        const packageDir = await resolvePackageDir(deps.packagesDir, id);
         if (packageDir) {
           return invokePackageFunction(packageDir, rawArgs, deps);
         }
-
-        const definition = deps.library.get(id);
-        if (!definition) {
-          return buildCallResponse({
-            error: `Unknown Function "${id}". Use fn_search to find compiled Functions.`,
-          });
-        }
-        return invokeFunction(definition, rawArgs, deps, {
-          full,
-          newRun,
-          runId,
+        return buildCallResponse({
+          error: `Unknown package "${id}". Use fn_search to find saved packages.`,
         });
       }
 
@@ -376,7 +354,7 @@ export function registerMetaTools(
           inputSchema: tool.inputSchema,
           name: tool.name,
         })),
-        functionCount: deps.library.size(),
+        packageCount: deps.packageLibrary.size(),
       });
       return buildCallResponse(stats);
     }
@@ -385,8 +363,7 @@ export function registerMetaTools(
   server.registerTool(
     'fn_inspect',
     {
-      description:
-        'Inspect a captured run: status, calls, fingerprints, and successful path.',
+      description: 'Inspect a captured run: status, calls, and fingerprints.',
       inputSchema: z.object({
         runId: z.string().describe('Run id returned by fn_call'),
       }),
@@ -407,108 +384,6 @@ export function registerMetaTools(
           ],
           isError: true,
         };
-      }
-    }
-  );
-
-  server.registerTool(
-    'fn_this',
-    {
-      description:
-        'Compile a successful read-only run into a reusable Function and fixture.',
-      inputSchema: z.object({
-        calls: z
-          .array(z.string())
-          .optional()
-          .describe('Evidence addresses to compile (default: all succeeded)'),
-        description: z.string().optional().describe('Function description'),
-        force: z
-          .boolean()
-          .optional()
-          .describe('Overwrite an existing Function with the same name'),
-        name: z
-          .string()
-          .describe('Function name (lowercase letters, numbers, hyphens)'),
-        runId: z.string().describe('Run id to compile'),
-      }),
-    },
-    async ({ runId, name, calls, description, force }) => {
-      try {
-        const result = await crystallizeRun({
-          calls,
-          configDir: deps.configDir,
-          description,
-          force,
-          functionsDir: deps.functionsDir,
-          name,
-          runId,
-        });
-        await deps.library.reload(deps.functionsDir);
-        return {
-          content: [
-            {
-              text: JSON.stringify(
-                {
-                  definitionPath: result.definitionPath,
-                  fixturePath: result.fixturePath,
-                  name,
-                  report: result.report,
-                  searchable: deps.library.get(name) !== undefined,
-                },
-                null,
-                2
-              ),
-              type: 'text' as const,
-            },
-          ],
-        };
-      } catch (error) {
-        return {
-          content: [
-            {
-              text: error instanceof Error ? error.message : String(error),
-              type: 'text' as const,
-            },
-          ],
-          isError: true,
-        };
-      }
-    }
-  );
-
-  server.registerTool(
-    'fn_test',
-    {
-      description:
-        'Run a compiled Function against its fixture and report drift or failures.',
-      inputSchema: z.object({
-        name: z.string().describe('Function name'),
-        repeat: z
-          .number()
-          .int()
-          .min(1)
-          .max(100)
-          .optional()
-          .describe('Repeat count (default 1)'),
-      }),
-    },
-    async ({ name, repeat }) => {
-      try {
-        const configPath = join(deps.configDir, 'upstreams.json');
-        const result = await runFunctionTest({
-          configPath,
-          functionsDir: deps.functionsDir,
-          name,
-          repeat,
-        });
-        return {
-          content: [{ text: result.output, type: 'text' as const }],
-          isError: !result.passed,
-        };
-      } catch (error) {
-        return buildGatewayErrorResponse(
-          error instanceof Error ? error.message : String(error)
-        );
       }
     }
   );

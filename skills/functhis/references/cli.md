@@ -11,27 +11,29 @@ These commands are for the Skill bootstrap sequence. **Users should not run them
 | `fn import mcp-json <path>` | Import any `mcp.json`-style file |
 | `fn setup [--force] [--write-client cursor\|claude\|opencode]` | Demo fixtures or merge client MCP entry |
 | `fn doctor` | Validate config and upstream connections |
-| `fn serve [--functions-dir PATH]` | Start stdio gateway (MCP client runs this) |
+| `fn serve [--packages-dir PATH]` | Start stdio gateway (MCP client runs this) |
 
 ## Gateway tools (preferred after bootstrap)
 
 | Tool | Input | Purpose |
 | --- | --- | --- |
-| `fn_search` | `{ query, limit? }` | Search Functions and catalog |
+| `fn_search` | `{ query, limit? }` | Search packages and catalog |
 | `fn_describe` | `{ ids: string[] }` | Load selected schemas |
-| `fn_call` | `{ id, arguments?, runId?, newRun?, full? }` | Invoke Function or upstream tool; large results return a pointer envelope |
+| `fn_call` | `{ id, arguments?, runId?, newRun?, full? }` | Invoke package or upstream tool; large results return a pointer envelope |
 | `fn_recall` | `{ runId, address, select?, offset?, limit?, full? }` | Read stored evidence with optional JMESPath |
 | `fn_select` | `{ runId, address, select, offset?, limit?, full? }` | Extract fields from stored evidence |
 | `fn_stats` | `{}` | Labeled schema/result savings estimates |
-| `fn_inspect` | `{ runId }` | Inspect run and successful path |
-| `fn_this` | `{ runId, name, calls?, force? }` | Compile Function |
-| `fn_test` | `{ name, repeat? }` | Fixture replay |
-| `<function-name>` | Function inputs | Direct Function invoke |
+| `fn_inspect` | `{ runId }` | Inspect run status and calls |
+| `fn_execute_code` | `{ source, allowedTools, input?, ... }` | Run sandbox TypeScript |
+| `fn_save_function` | `{ name, description, source, allowedTools }` | Save a function package |
+| `fn_install_function` | `{ path, approve }` | Install a package from disk |
+| `fn_inspect_function` | `{ name?, path? }` | Compare lockfile to live catalog |
+| `<package-name>` | `{ input? }` | Direct package invoke |
 
 ## Config locations
 
 - `.functhis/upstreams.json` or `~/.functhis/upstreams.json`
 - Runs: `.functhis/runs/`
-- Functions: `./functions/`
+- Packages: `./packages/<name>/`
 
 Restart the MCP client once after first bootstrap so `fn_search` appears in the tool list.

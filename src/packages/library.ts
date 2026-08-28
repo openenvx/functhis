@@ -68,27 +68,27 @@ export class PackageLibrary {
     return hits.sort((a, b) => b.score - a.score).slice(0, limit);
   }
 
-  static async load(functionsRoot: string): Promise<PackageLibrary> {
+  static async load(packagesRoot: string): Promise<PackageLibrary> {
     const library = new PackageLibrary();
-    await library.loadFromDir(functionsRoot);
+    await library.loadFromDir(packagesRoot);
     return library;
   }
 
-  async reload(functionsRoot: string): Promise<void> {
+  async reload(packagesRoot: string): Promise<void> {
     this.packages.clear();
-    await this.loadFromDir(functionsRoot);
+    await this.loadFromDir(packagesRoot);
   }
 
-  private async loadFromDir(functionsRoot: string): Promise<void> {
+  private async loadFromDir(packagesRoot: string): Promise<void> {
     let entries: string[];
     try {
-      entries = await readdir(functionsRoot);
+      entries = await readdir(packagesRoot);
     } catch {
       return;
     }
 
     for (const entry of entries) {
-      const dir = join(functionsRoot, entry);
+      const dir = join(packagesRoot, entry);
       try {
         const info = await stat(dir);
         if (!info.isDirectory()) {

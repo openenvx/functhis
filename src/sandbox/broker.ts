@@ -1,8 +1,4 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-
 import { parseToolId } from '../catalog/namespace';
-import type { GraphStore } from '../graph/store';
 import { normalizeCallResult } from '../mcp/normalize';
 import { estimateUtf8Bytes } from '../output';
 import { assertToolAllowed } from '../policy/access';
@@ -13,7 +9,6 @@ import type { UpstreamManager } from '../upstream/manager';
 export interface BrokerOptions {
   allowedTools: string[];
   approveWrites?: boolean;
-  graphStore?: GraphStore;
   maxBytesPerResult?: number;
   maxCalls?: number;
   onCall?: (info: {
@@ -22,8 +17,6 @@ export interface BrokerOptions {
     toolId: string;
   }) => void;
   recorder?: TraceRecorder;
-  repoRead?: boolean;
-  repoRoot?: string;
   signal?: AbortSignal;
 }
 
@@ -82,26 +75,6 @@ export class CapabilityBroker {
     });
 
     return redacted;
-  }
-
-  getRepoSnippet(nodeId: string): string {
-    if (!this.options.repoRead) {
-      throw new Error('Repository read access was not granted');
-    }
-    const store = this.options.graphStore;
-    if (!store) {
-      throw new Error('Graph store is not available for repo reads');
-    }
-    const node = store.getNode(nodeId);
-    if (!node?.srcPath || !node.srcStart || !node.srcEnd) {
-      throw new Error(`No source location for node ${nodeId}`);
-    }
-    const root = this.options.repoRoot ?? process.cwd();
-    const absPath = join(root, node.srcPath);
-    const lines = readFileSync(absPath, 'utf-8').split('\n');
-    const from = Math.max(0, node.srcStart - 1);
-    const to = Math.min(lines.length, node.srcEnd);
-    return lines.slice(from, to).join('\n');
   }
 
   buildToolsProxy(): Record<

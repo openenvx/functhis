@@ -41,21 +41,21 @@ export function discoverClientConfigTargets(
   return discoverWriteTargets(client, cwd);
 }
 
-export function getFuncthisMcpEntry(functionsDir?: string): {
+export function getFuncthisMcpEntry(packagesDir?: string): {
   command: string;
   args: string[];
 } {
   const args = ['serve'];
-  if (functionsDir) {
-    args.push('--functions-dir', functionsDir);
+  if (packagesDir) {
+    args.push('--packages-dir', packagesDir);
   }
   return { args, command: 'fn' };
 }
 
 function getFuncthisOpenCodeEntry(
-  functionsDir?: string
+  packagesDir?: string
 ): z.infer<typeof opencodeLocalEntrySchema> {
-  const entry = getFuncthisMcpEntry(functionsDir);
+  const entry = getFuncthisMcpEntry(packagesDir);
   return {
     command: [entry.command, ...entry.args],
     enabled: true,
@@ -71,14 +71,14 @@ function parseConfigFile(path: string): unknown {
 export async function mergeFuncthisClientConfig(options: {
   client: ClientTarget;
   targetPath: string;
-  functionsDir?: string;
+  packagesDir?: string;
   dryRun?: boolean;
 }): Promise<{ backupPath?: string; changed: boolean; path: string }> {
   if (options.client === 'opencode') {
     return mergeFuncthisOpenCodeConfig(options);
   }
 
-  const entry = getFuncthisMcpEntry(options.functionsDir);
+  const entry = getFuncthisMcpEntry(options.packagesDir);
   let existing: z.infer<typeof mcpFileSchema> = { mcpServers: {} };
 
   if (existsSync(options.targetPath)) {
@@ -123,10 +123,10 @@ export async function mergeFuncthisClientConfig(options: {
 
 async function mergeFuncthisOpenCodeConfig(options: {
   targetPath: string;
-  functionsDir?: string;
+  packagesDir?: string;
   dryRun?: boolean;
 }): Promise<{ backupPath?: string; changed: boolean; path: string }> {
-  const entry = getFuncthisOpenCodeEntry(options.functionsDir);
+  const entry = getFuncthisOpenCodeEntry(options.packagesDir);
   let existing: z.infer<typeof opencodeFileSchema> = { mcp: {} };
 
   if (existsSync(options.targetPath)) {

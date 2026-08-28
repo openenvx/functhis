@@ -5,27 +5,31 @@ import { PACKAGE_NAME_PATTERN } from './schema';
 export function assertValidPackageName(name: string): void {
   if (!PACKAGE_NAME_PATTERN.test(name)) {
     throw new Error(
-      `Invalid function name "${name}". Use lowercase letters, digits, and hyphens; must start with a letter.`
+      `Invalid package name "${name}". Use lowercase letters, digits, and hyphens; must start with a letter.`
     );
   }
 }
 
-export function getFunctionsDir(
+export function getPackagesDir(
   cwd = process.cwd(),
-  functionsDir?: string
+  packagesDir?: string
 ): string {
-  if (functionsDir) {
-    return resolve(cwd, functionsDir);
+  if (packagesDir) {
+    return resolve(cwd, packagesDir);
   }
-  return resolve(cwd, 'functions');
+  return resolve(cwd, 'packages');
 }
 
-export function getPackageDir(functionsRoot: string, name: string): string {
+export function isPackageToolId(id: string): boolean {
+  return !id.includes('.');
+}
+
+export function getPackageDir(packagesRoot: string, name: string): string {
   assertValidPackageName(name);
-  const root = resolve(functionsRoot);
+  const root = resolve(packagesRoot);
   const target = resolve(root, name);
   if (!target.startsWith(`${root}/`) && target !== `${root}/${name}`) {
-    throw new Error(`Package path escapes functions directory: ${name}`);
+    throw new Error(`Package path escapes packages directory: ${name}`);
   }
   return target;
 }

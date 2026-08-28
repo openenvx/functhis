@@ -9,10 +9,9 @@ import { packageLockSchema, packageManifestSchema } from './schema';
 export interface SavePackageOptions {
   allowedTools: string[];
   description: string;
-  functionsRoot: string;
+  packagesRoot: string;
   inputSchema?: Record<string, unknown>;
   name: string;
-  repoRead?: boolean;
   source: string;
 }
 
@@ -21,9 +20,7 @@ export async function savePackage(
   options: SavePackageOptions
 ): Promise<string> {
   const manifest: PackageManifest = packageManifestSchema.parse({
-    apiVersion: 'functhis.dev/v1',
     capabilities: {
-      repo: options.repoRead ? 'read' : 'none',
       tools: options.allowedTools,
       writes: 'deny',
     },
@@ -35,7 +32,6 @@ export async function savePackage(
     },
     name: options.name,
     runtime: {
-      functhis: '>=0.2.0',
       maxCalls: 20,
       maxOutputBytes: 6 * 1024,
       timeoutMs: 30_000,
@@ -61,7 +57,7 @@ export async function savePackage(
     version: 1,
   });
 
-  const packageDir = join(options.functionsRoot, options.name);
+  const packageDir = join(options.packagesRoot, options.name);
   await mkdir(packageDir, { recursive: true });
   await mkdir(join(packageDir, 'tests'), { recursive: true });
 

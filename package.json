@@ -2,7 +2,7 @@
   "name": "functhis",
   "version": "0.2.0",
   "private": false,
-  "description": "Local MCP gateway with repo knowledge graph, sandboxed TypeScript, and shareable function packages.",
+  "description": "Local MCP gateway with repo knowledge graph, sandboxed TypeScript, and shareable packages.",
   "homepage": "https://github.com/openenvx/functhis#readme",
   "bugs": {
     "url": "https://github.com/openenvx/functhis/issues"

@@ -32,15 +32,6 @@ async function runGuest(
 ): Promise<unknown> {
   const tools = buildToolsProxy(message.allowedTools);
   const ctx: Record<string, unknown> = { tools };
-  if (message.repoRead) {
-    ctx.repo = {
-      getSnippet: async (nodeId: string) => {
-        throw new Error(
-          `Repository reads are brokered in the parent; node ${nodeId} is unavailable in the child`
-        );
-      },
-    };
-  }
 
   const runner = new AsyncFunction(
     'ctx',
@@ -81,8 +72,9 @@ function buildToolsProxy(
 }
 
 async function callParentTool(toolId: string, args: unknown): Promise<unknown> {
-  const callId = nextCallId++;
-  return new Promise((resolve, reject) => {
+  nextCallId += 1;
+  const callId = nextCallId;
+  return await new Promise((resolve, reject) => {
     const onMessage = (response: SandboxParentMessage): void => {
       if (response.type === 'tool_result' && response.callId === callId) {
         process.off('message', onMessage);

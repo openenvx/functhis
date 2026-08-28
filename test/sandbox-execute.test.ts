@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { UpstreamManager } from '../src/upstream/manager';
 import { CapabilityBroker } from '../src/sandbox/broker';
 import { executeSandboxCode } from '../src/sandbox/runner';
+import { UpstreamManager } from '../src/upstream/manager';
 
 describe('sandbox execution', () => {
   it('filters a large payload inside the sandbox', async () => {

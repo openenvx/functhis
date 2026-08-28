@@ -1,6 +1,6 @@
 # Install Functhis
 
-You only install the **Skill**. The agent handles everything else — CLI install, MCP import, gateway wiring, recording, and (when you ask) compilation.
+You only install the **Skill**. The agent handles everything else — CLI install, MCP import, gateway wiring, recording, and (when you ask) saving packages.
 
 **Requirements:** Node.js 22 or newer (the agent uses it to run `fn` locally). No account, cloud, or API key for Functhis itself.
 
@@ -74,25 +74,28 @@ After that, **recording is automatic**. Every `fn_call` writes evidence to `.fun
 | MCP schema tokens | Compact meta-tools instead of full catalog |
 | Large tool results | Pointer envelope + `fn_select` for fields ([contract](docs/MCP.md)) |
 | Evidence / traces | Recorded on every `fn_call` |
-| Compile to Function | **Only when you ask** (see below) |
+| Save a function package | **Only when you ask** (see below) |
 
 The agent should **not** call other MCP servers directly when Functhis is available — all MCP traffic goes through the gateway so it can be recorded and shaped.
 
 ---
 
-## 4. Crystallize when you want a reusable Function
+## 4. Save a package when you want a reusable function
 
-When a workflow worked and you want it saved in the repo:
+When sandbox logic worked and you want it saved in the repo:
 
-> Crystallize the last MCP workflow as `lookup-deploy-issues`.
+> Save that workflow as a function package named `get-deploy-issues`.
 
-Or:
+The agent will run `fn_save_function` and create:
 
-> Compile that successful read-only path into a Function and test it.
+```text
+packages/<name>/
+  function.ts
+  functhis.json
+  functhis.lock
+```
 
-The agent will run `fn_inspect` → `fn_this` → `fn_test` and create `functions/<name>.ts` plus a fixture. You do not run terminal commands yourself.
-
-On similar tasks later, the agent prefers the compiled Function (one tool, no rediscovery).
+You do not run terminal commands yourself. On similar tasks later, the agent prefers the saved package (one tool, no rediscovery).
 
 ---
 
@@ -104,7 +107,7 @@ On similar tasks later, the agent prefers the compiled Function (one tool, no re
 | “What did Functhis record?” | `fn_inspect` on the current `runId` |
 | “Pull field X from the last call” | `fn_select` with JMESPath |
 | “How much context did we save?” | `fn_stats` |
-| “Crystallize / compile / save this workflow” | `fn_this` + `fn_test` |
+| “Save this workflow as a function” | `fn_execute_code` then `fn_save_function` |
 
 ---
 
@@ -112,8 +115,7 @@ On similar tasks later, the agent prefers the compiled Function (one tool, no re
 
 | Path | Purpose |
 | --- | --- |
-| `functions/*.ts` | Compiled Functions (commit these) |
-| `functions/*.fixture.json` | Replay fixtures (commit these) |
+| `packages/<name>/` | Saved packages (commit these) |
 | `.functhis/upstreams.json` | Imported MCP server config (optional commit) |
 | `.functhis/runs/` | Local traces (usually **gitignore** — evidence, not product code) |
 
@@ -133,7 +135,7 @@ Add to `.gitignore` if you do not want runs in git:
 | Agent still calls GitHub MCP directly | Say: “Route all MCP through Functhis.” Ensure the Skill is active. |
 | `fn import` found zero servers | Configure MCP servers in Cursor first, then ask agent to bootstrap again |
 | Write tools denied | By design — start with read-only tools |
-| Compilation failed | Ask agent to `fn_inspect` the run and retry with a clearer name |
+| Save failed | Ask agent to retry with a valid package name and allowlisted tools |
 
 For power users and CI, see [skills/functhis/references/cli.md](skills/functhis/references/cli.md) and [docs/DEMO.md](docs/DEMO.md).
 

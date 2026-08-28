@@ -8,7 +8,9 @@ import type { LockDriftIssue, LockInspection } from './schema';
 
 export function inspectLockDrift(
   manager: UpstreamManager,
-  lock: { tools: Record<string, { name: string; schemaHash: string; server: string }> }
+  lock: {
+    tools: Record<string, { name: string; schemaHash: string; server: string }>;
+  }
 ): LockInspection {
   const issues: LockDriftIssue[] = [];
 
@@ -37,12 +39,12 @@ export function inspectLockDrift(
 
 export async function installPackageFromPath(
   sourcePath: string,
-  functionsRoot: string,
+  packagesRoot: string,
   options: { approve?: boolean } = {}
 ): Promise<{ name: string; targetDir: string }> {
   const resolved = resolve(sourcePath);
   const { manifest } = await loadPackage(resolved);
-  const targetDir = join(functionsRoot, manifest.name);
+  const targetDir = join(packagesRoot, manifest.name);
 
   if (!options.approve) {
     throw new Error(
@@ -50,7 +52,7 @@ export async function installPackageFromPath(
     );
   }
 
-  await mkdir(functionsRoot, { recursive: true });
+  await mkdir(packagesRoot, { recursive: true });
   await cp(resolved, targetDir, { recursive: true });
 
   return { name: manifest.name, targetDir };
@@ -66,7 +68,6 @@ export async function formatInspectReport(
     `Function: ${manifest.name}`,
     `Description: ${manifest.description}`,
     `Tools: ${manifest.capabilities.tools.join(', ')}`,
-    `Repo access: ${manifest.capabilities.repo}`,
     `Writes: ${manifest.capabilities.writes}`,
     '',
     drift.ok ? 'Lock status: OK' : 'Lock status: DRIFT DETECTED',
@@ -80,10 +81,10 @@ export async function formatInspectReport(
 }
 
 export async function resolvePackageDir(
-  functionsRoot: string,
+  packagesRoot: string,
   name: string
 ): Promise<string | undefined> {
-  const packageDir = join(functionsRoot, name);
+  const packageDir = join(packagesRoot, name);
   try {
     await readFile(join(packageDir, 'functhis.json'), 'utf-8');
     return packageDir;

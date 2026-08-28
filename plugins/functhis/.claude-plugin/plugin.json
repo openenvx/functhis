@@ -1,7 +1,6 @@
 {
   "name": "functhis",
-  "version": "0.2.0",
-  "description": "Functhis skills for MCP discovery, trace capture, and Function replay.",
+  "description": "Functhis skills for MCP gateway, sandbox code, and function packages.",
   "author": {
     "name": "OpenEnvX"
   },

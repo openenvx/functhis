@@ -1,12 +1,5 @@
 # Security Policy
 
-## Supported Versions
-
-| Version | Supported |
-| ------- | --------- |
-| 0.1.x   | Yes       |
-| < 0.1   | No        |
-
 ## Reporting a Vulnerability
 
 Please **do not** open public GitHub issues for security vulnerabilities.
@@ -15,7 +8,6 @@ Email security reports to the maintainers via GitHub private security advisories
 
 Include:
 
-- Affected version
 - Steps to reproduce
 - Impact assessment
 - Suggested fix (optional)
@@ -30,6 +22,7 @@ Functhis is a local MCP gateway. Reports are in scope when they demonstrate:
 - Path traversal outside configured roots
 - Unauthorized upstream tool invocation bypassing policy
 - Command injection via upstream configuration or tool arguments
+- Sandbox escape from `fn_execute_code` or saved packages
 
 Out of scope for the local open-source product:
 
@@ -40,4 +33,5 @@ Out of scope for the local open-source product:
 
 - Unknown and write tools are denied by default in the gateway
 - Secrets are redacted before trace persistence
-- Generated Functions are data, not arbitrary executable code in local mode
+- Sandbox code runs in an isolated child process with an explicit tool allowlist; it cannot import modules, access `process`, or reach the network
+- Saved packages inherit the same sandbox model and lock upstream tool schemas at save time

@@ -47,7 +47,7 @@ When the result exceeds the budget, `result` is **omitted** and a pointer envelo
 | `hint`      | How to read more without dumping context                   |
 | `result`    | Present only when `truncated` is `false` (or `full: true`) |
 
-**Breaking change in 0.2.0:** Integrations that always read `payload.result` from `fn_call` must use `fn_select` / `fn_recall` for large responses.
+**Pointer envelopes:** Integrations that always read `payload.result` from `fn_call` must use `fn_select` / `fn_recall` for large responses.
 
 ## Reading stored evidence
 
@@ -79,18 +79,18 @@ Same as `fn_select` but `select` is optional. Prefer `fn_select` when you know t
 | Surface | Default `full` | Behavior |
 | --- | --- | --- |
 | MCP `fn_call` | `false` | Compact envelope unless `full: true` |
-| MCP `<function-name>` (direct Function tool) | `false` | Same envelope contract as `fn_call`; optional `full` on the tool schema |
+| MCP `<package-name>` (direct package tool) | `false` | Same envelope contract as `fn_call`; optional `full` on the tool schema |
 | MCP `fn_recall` / `fn_select` | `false` | Compact envelope unless `full: true` |
 | CLI `fn recall` | `true` | Full shaped payload for terminal inspection |
 
 ## Workflow
 
-1. `fn_search` — find Functions or upstream tools
+1. `fn_search` — find saved packages or upstream tools
 2. `fn_describe` — load schemas for selected ids only
 3. `fn_call` — invoke; treat output as a **handle** when `truncated: true`
 4. `fn_select` — read fields from stored evidence without re-calling upstream
-5. `fn_inspect` — review run status, calls, and successful path
-6. `fn_this` / `fn_test` — crystallize and replay (on request)
+5. `fn_inspect` — review run status and calls
+6. `fn_save_function` — save sandbox code as a package (on request)
 
 ## Safety notes
 

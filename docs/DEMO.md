@@ -1,6 +1,6 @@
 # Local demo
 
-Functhis indexes your repo and upstream MCP tools into a SQLite graph, runs sandboxed TypeScript against allowlisted tools, and saves reusable function packages under `functions/`.
+Functhis indexes your repo and upstream MCP tools into a SQLite graph, runs sandboxed TypeScript against allowlisted tools, and saves reusable packages under `packages/`.
 
 ## Skill-driven loop (recommended)
 

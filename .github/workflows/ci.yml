@@ -69,7 +69,8 @@ jobs:
           PREFIX=$(mktemp -d)
           npm install -g "$TARBALL" --prefix "$PREFIX"
           export PATH="$PREFIX/bin:$PATH"
-          fn --version | grep -q "0.2.0"
+          VERSION=$(node -p "require('./package.json').version")
+          fn --version | grep -q "$VERSION"
           CONFIG_DIR=$(mktemp -d)
           fn setup --dir "$CONFIG_DIR"
           fn doctor --dir "$CONFIG_DIR"

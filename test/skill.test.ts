@@ -23,7 +23,7 @@ describe('skill descriptions', () => {
     );
     expect(description.toLowerCase()).toContain('record');
     expect(description.toLowerCase()).toContain('fn_search');
-    expect(description.toLowerCase()).toContain('crystallize');
+    expect(description.toLowerCase()).toContain('fn_save_function');
     expect(description.toLowerCase()).toContain('auto-bootstrap');
   });
 

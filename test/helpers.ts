@@ -97,7 +97,7 @@ function parseToolText(result: {
 export async function withGatewayClient(
   options: {
     configPath: string;
-    functionsDir?: string;
+    packagesDir?: string;
     cwd?: string;
   },
   fn: (client: Client) => Promise<void>
@@ -105,8 +105,8 @@ export async function withGatewayClient(
   const cliPath = join(packageRoot, 'src', 'cli.ts');
   const invocation = invocationForScript(cliPath);
   const args = ['serve', '--config', options.configPath];
-  if (options.functionsDir) {
-    args.push('--functions-dir', options.functionsDir);
+  if (options.packagesDir) {
+    args.push('--packages-dir', options.packagesDir);
   }
 
   const transport = new StdioClientTransport({

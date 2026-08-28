@@ -1,8 +1,8 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { FunctionLibrary } from '../functions/library';
-import { getFunctionsDir } from '../functions/paths';
+import { PackageLibrary } from '../packages/library';
+import { getPackagesDir } from '../packages/paths';
 import { findPackageRoot } from '../paths';
 import { loadConfig } from '../storage/config';
 import { resolveConfigDir } from '../storage/paths';
@@ -20,9 +20,8 @@ export interface DoctorResult {
     nodeVersion: string;
     packageVersion: string;
   };
-  functions: {
+  packages: {
     loaded: string[];
-    skipped: { name: string; error: string }[];
     total: number;
   };
   upstreams: {
@@ -38,7 +37,7 @@ export interface DoctorResult {
 
 export async function runDoctor(options: {
   dir?: string;
-  functionsDir?: string;
+  packagesDir?: string;
 }): Promise<DoctorResult> {
   const configDir = resolveConfigDir(options.dir);
   const configPath = join(configDir, 'upstreams.json');
@@ -49,8 +48,8 @@ export async function runDoctor(options: {
 
   const config = await loadConfig(configPath);
   const manager = new UpstreamManager();
-  const functionsRoot = getFunctionsDir(process.cwd(), options.functionsDir);
-  const library = await FunctionLibrary.load(functionsRoot);
+  const packagesRoot = getPackagesDir(process.cwd(), options.packagesDir);
+  const packageLibrary = await PackageLibrary.load(packagesRoot);
   const backups = await countBackupsForFile(configPath);
 
   try {
@@ -83,12 +82,11 @@ export async function runDoctor(options: {
         nodeVersion: process.version,
         packageVersion: packageJson.version,
       },
-      functions: {
-        loaded: library.getAll().map((definition) => definition.name),
-        skipped: library.getSkipped(),
-        total: library.size(),
-      },
       ok,
+      packages: {
+        loaded: packageLibrary.getAll().map((pkg) => pkg.manifest.name),
+        total: packageLibrary.size(),
+      },
       totalTools,
       upstreams,
     };
@@ -118,13 +116,10 @@ export function formatDoctorReport(result: DoctorResult): string {
   lines.push(
     '',
     `Total indexed tools: ${result.totalTools}`,
-    `Loaded Functions: ${result.functions.total}`
+    `Loaded packages: ${result.packages.total}`
   );
-  if (result.functions.loaded.length > 0) {
-    lines.push(`  ${result.functions.loaded.join(', ')}`);
-  }
-  for (const skipped of result.functions.skipped) {
-    lines.push(`  ⚠ skipped ${skipped.name}: ${skipped.error}`);
+  if (result.packages.loaded.length > 0) {
+    lines.push(`  ${result.packages.loaded.join(', ')}`);
   }
   lines.push('', result.ok ? 'Status: OK' : 'Status: FAILED');
   return lines.join('\n');

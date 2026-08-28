@@ -19,9 +19,9 @@ HTTP/remote servers and the Functhis gateway entry itself are skipped.
 ## Write Functhis into a client (Skill bootstrap)
 
 ```bash
-fn setup --write-client cursor --functions-dir ./functions
-fn setup --write-client claude --functions-dir ./functions
-fn setup --write-client opencode --functions-dir ./functions
+fn setup --write-client cursor --packages-dir ./packages
+fn setup --write-client claude --packages-dir ./packages
+fn setup --write-client opencode --packages-dir ./packages
 ```
 
 Each command backs up the target config before merging.
@@ -35,7 +35,7 @@ Each command backs up the target config before merging.
   "mcpServers": {
     "functhis": {
       "command": "fn",
-      "args": ["serve", "--functions-dir", "./functions"]
+      "args": ["serve", "--packages-dir", "./packages"]
     }
   }
 }
@@ -48,7 +48,7 @@ Each command backs up the target config before merging.
   "mcp": {
     "functhis": {
       "type": "local",
-      "command": ["fn", "serve", "--functions-dir", "./functions"],
+      "command": ["fn", "serve", "--packages-dir", "./packages"],
       "enabled": true
     }
   }

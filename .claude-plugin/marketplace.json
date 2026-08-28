@@ -4,13 +4,13 @@
     "name": "OpenEnvX"
   },
   "metadata": {
-    "description": "Local MCP gateway and Function crystallization skills for Functhis."
+    "description": "Local MCP gateway and function package skills for Functhis."
   },
   "plugins": [
     {
       "name": "functhis",
       "source": "./plugins/functhis",
-      "description": "Discover MCP tools, capture traces, and replay compiled Functions through the Functhis gateway.",
+      "description": "Route MCP through one gateway, run sandbox TypeScript, and save reusable function packages.",
       "homepage": "https://github.com/openenvx/functhis",
       "license": "Apache-2.0",
       "install": "npm install -g functhis"

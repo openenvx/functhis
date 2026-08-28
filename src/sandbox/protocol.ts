@@ -2,7 +2,6 @@ export type SandboxParentMessage =
   | {
       allowedTools: string[];
       input: Record<string, unknown>;
-      repoRead: boolean;
       source: string;
       type: 'run';
     }
@@ -24,7 +23,6 @@ export interface SandboxExecuteOptions {
   input?: Record<string, unknown>;
   maxCalls?: number;
   maxOutputBytes?: number;
-  repoRead?: boolean;
   source: string;
   timeoutMs?: number;
 }

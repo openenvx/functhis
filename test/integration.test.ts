@@ -29,31 +29,34 @@ describe('integration', () => {
       const configPath = join(configDir, 'upstreams.json');
       await saveConfig(configPath, testUpstreamConfig());
 
-      await withGatewayClient({ configPath, cwd: packageRoot }, async (client) => {
-        const indexResult = await client.callTool({
-          arguments: { include: ['src/catalog'], root: packageRoot },
-          name: 'fn_index',
-        });
-        const indexBody = parseToolText(indexResult) as {
-          filesIndexed: number;
-        };
-        expect(indexBody.filesIndexed).toBeGreaterThan(0);
+      await withGatewayClient(
+        { configPath, cwd: packageRoot },
+        async (client) => {
+          const indexResult = await client.callTool({
+            arguments: { include: ['src/catalog'], root: packageRoot },
+            name: 'fn_index',
+          });
+          const indexBody = parseToolText(indexResult) as {
+            filesIndexed: number;
+          };
+          expect(indexBody.filesIndexed).toBeGreaterThan(0);
 
-        const searchResult = await client.callTool({
-          arguments: { limit: 10, query: 'fingerprintTool' },
-          name: 'fn_search_context',
-        });
-        const subgraph = parseToolText(searchResult) as {
-          bytes: number;
-          edges: unknown[];
-          nodes: { name: string }[];
-        };
-        expect(subgraph.bytes).toBeLessThanOrEqual(6 * 1024);
-        expect(subgraph.nodes.some((node) => node.name.includes('fingerprint'))).toBe(
-          true
-        );
-        expect(subgraph.edges.length).toBeGreaterThan(0);
-      });
+          const searchResult = await client.callTool({
+            arguments: { limit: 10, query: 'fingerprintTool' },
+            name: 'fn_search_context',
+          });
+          const subgraph = parseToolText(searchResult) as {
+            bytes: number;
+            edges: unknown[];
+            nodes: { name: string }[];
+          };
+          expect(subgraph.bytes).toBeLessThanOrEqual(6 * 1024);
+          expect(
+            subgraph.nodes.some((node) => node.name.includes('fingerprint'))
+          ).toBe(true);
+          expect(subgraph.edges.length).toBeGreaterThan(0);
+        }
+      );
     });
   }, 60_000);
 
@@ -90,7 +93,7 @@ export default async function(ctx, input) {
     await withTempConfigDir(async (configDir) => {
       const configPath = join(configDir, 'upstreams.json');
       await saveConfig(configPath, testUpstreamConfig());
-      const functionsDir = await mkdtemp(join(tmpdir(), 'functhis-int-pkg-'));
+      const packagesDir = await mkdtemp(join(tmpdir(), 'functhis-int-pkg-'));
 
       try {
         const source = `
@@ -100,7 +103,7 @@ export default async function(ctx, input) {
 `;
 
         await withGatewayClient(
-          { configPath, cwd: packageRoot, functionsDir },
+          { configPath, cwd: packageRoot, packagesDir },
           async (client) => {
             const saveResult = await client.callTool({
               arguments: {
@@ -137,7 +140,7 @@ export default async function(ctx, input) {
           }
         );
       } finally {
-        await rm(functionsDir, { force: true, recursive: true });
+        await rm(packagesDir, { force: true, recursive: true });
       }
     });
   }, 60_000);

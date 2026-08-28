@@ -61,7 +61,7 @@ export async function runSetup(options: {
   dir?: string;
   dryRun?: boolean;
   force?: boolean;
-  functionsDir?: string;
+  packagesDir?: string;
   writeClient?: ClientTarget[];
 }): Promise<SetupResult> {
   const configDir = resolveConfigDir(options.dir);
@@ -105,7 +105,7 @@ export async function runSetup(options: {
     for (const target of discoverClientConfigTargets(client)) {
       const result = await mergeFuncthisClientConfig({
         client,
-        functionsDir: options.functionsDir,
+        packagesDir: options.packagesDir,
         targetPath: target.path,
       });
       clientWrites.push(result);

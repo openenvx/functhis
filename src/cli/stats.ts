@@ -32,7 +32,7 @@ export async function runStats(options?: { dir?: string }): Promise<string> {
     `Stored result bytes (est.): ${summary.storedResultBytes}`,
     `Returned result bytes (est.): ${summary.returnedResultBytes}`,
     `Result bytes saved (est.): ${summary.estimatedResultBytesSaved}`,
-    `Function calls: ${summary.functionCalls}`,
+    `Package calls: ${summary.packageCalls}`,
     `Upstream calls: ${summary.upstreamCalls}`,
     `Total call duration: ${summary.totalDurationMs}ms`,
   ].join('\n');
