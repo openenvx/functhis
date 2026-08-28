@@ -50,6 +50,7 @@ export interface IndexReport {
 }
 
 export interface ContextSearchHit {
+  attrs?: Record<string, unknown>;
   id: string;
   kind: NodeKind;
   name: string;

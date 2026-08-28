@@ -15,6 +15,8 @@ These commands are for the Skill bootstrap sequence. **Users should not run them
 | `fn traces list` | List recent captured traces |
 | `fn traces inspect <run-id>` | Inspect trace dataflow |
 | `fn traces compile <run-id> --name <name>` | Compile trace to skeleton |
+| `fn traces candidates` | Detect repeated trace patterns |
+| `fn traces compile-group <id> --name <name>` | Compile briefs for a candidate group |
 | `fn functions test <name>` | Verify a saved package |
 | `fn stats [--function <name>] [--tool <id>]` | Local statistics |
 
@@ -30,9 +32,10 @@ These commands are for the Skill bootstrap sequence. **Users should not run them
 | `fn_stats` | `{}` or `{ function?, tool? }` | Labeled schema/result savings estimates |
 | `fn_inspect` | `{ runId? }` | List traces or inspect dataflow for a run |
 | `fn_compile_trace` | `{ runId, name, description? }` | Compile trace to brief + skeleton |
+| `fn_candidates` | `{ limit?, minOccurrences? }` | Detect repeated trace patterns (suggest only) |
 | `fn_test_function` | `{ name?, source?, allowedTools?, mode?, compiledFrom?, ... }` | Verify package locally |
 | `fn_execute_code` | `{ source, allowedTools, input?, ... }` | Run sandbox TypeScript |
-| `fn_save_function` | `{ name, description, source, allowedTools }` | Save a function package |
+| `fn_save_function` | `{ name, description, source, allowedTools, dryRun?, approveWrites? }` | Save a function package |
 | `fn_install_function` | `{ path, approve }` | Install a package from disk |
 | `fn_inspect_function` | `{ name?, path? }` | Compare lockfile to live catalog |
 | `<package-name>` | `{ input? }` | Direct package invoke |

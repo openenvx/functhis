@@ -13,10 +13,18 @@ import type {
 const DEFAULT_CONTEXT_BUDGET_BYTES = 6 * 1024;
 const MAX_EXCERPT_LINES = 20;
 const REPO_EDGE_KINDS: EdgeKind[] = ['contains', 'imports', 'exported_from'];
+const TRACE_EDGE_KINDS: EdgeKind[] = ['uses_tool', 'contains'];
 const TOOL_EDGE_KINDS: EdgeKind[] = [
   'has_tool',
   'has_field',
   'field_name_match',
+];
+const DEFAULT_SEARCH_KINDS: NodeKind[] = [
+  'file',
+  'symbol',
+  'function',
+  'run',
+  'tool',
 ];
 
 export function searchContext(
@@ -32,7 +40,7 @@ export function searchContext(
   const maxBytes = options.maxBytes ?? DEFAULT_CONTEXT_BUDGET_BYTES;
   const repoRoot = resolve(options.repoRoot ?? process.cwd());
 
-  const hits = store.searchFts(query, ['file', 'symbol'], limit);
+  const hits = store.searchFts(query, DEFAULT_SEARCH_KINDS, limit);
   const nodes: ContextSearchHit[] = [];
   const edges: SubgraphResult['edges'] = [];
   const seenNodeIds = new Set<string>();
@@ -51,7 +59,13 @@ export function searchContext(
     nodes.push(contextHit);
     seenNodeIds.add(hit.id);
 
-    const neighbors = store.getNeighbors(hit.id, REPO_EDGE_KINDS).slice(0, 20);
+    const edgeKinds =
+      node.kind === 'tool' || node.kind === 'server'
+        ? TOOL_EDGE_KINDS
+        : node.kind === 'function' || node.kind === 'run'
+          ? TRACE_EDGE_KINDS
+          : REPO_EDGE_KINDS;
+    const neighbors = store.getNeighbors(hit.id, edgeKinds).slice(0, 20);
     for (const { edge, node: neighbor } of neighbors) {
       const edgeKey = `${edge.fromId}:${edge.kind}:${edge.toId}`;
       if (!seenEdgeKeys.has(edgeKey)) {
@@ -65,6 +79,92 @@ export function searchContext(
       if (!seenNodeIds.has(neighbor.id) && nodes.length < limit * 2) {
         nodes.push(nodeToHit(neighbor, 0, repoRoot));
         seenNodeIds.add(neighbor.id);
+      }
+    }
+  }
+
+  return trimSubgraph({ bytes: 0, edges, nodes }, maxBytes);
+}
+
+export function searchSymbolAndTool(
+  store: GraphStore,
+  options: {
+    limit?: number;
+    maxBytes?: number;
+    query: string;
+    repoRoot?: string;
+    toolId: string;
+  }
+): SubgraphResult {
+  const limit = options.limit ?? 15;
+  const maxBytes = options.maxBytes ?? DEFAULT_CONTEXT_BUDGET_BYTES;
+  const repoRoot = resolve(options.repoRoot ?? process.cwd());
+
+  const nodes: ContextSearchHit[] = [];
+  const edges: SubgraphResult['edges'] = [];
+  const seenNodeIds = new Set<string>();
+  const seenEdgeKeys = new Set<string>();
+
+  const addNode = (
+    node: Parameters<typeof nodeToHit>[0],
+    score: number
+  ): void => {
+    if (seenNodeIds.has(node.id)) {
+      return;
+    }
+    nodes.push(nodeToHit(node, score, repoRoot));
+    seenNodeIds.add(node.id);
+  };
+
+  const addEdge = (edge: SubgraphResult['edges'][number]): void => {
+    const edgeKey = `${edge.fromId}:${edge.kind}:${edge.toId}`;
+    if (!seenEdgeKeys.has(edgeKey)) {
+      edges.push(edge);
+      seenEdgeKeys.add(edgeKey);
+    }
+  };
+
+  for (const hit of store.searchFts(options.query, ['file', 'symbol'], limit)) {
+    const node = store.getNode(hit.id);
+    if (node) {
+      addNode(node, hit.score);
+    }
+  }
+
+  const toolNode = store.getNode(options.toolId);
+  if (toolNode) {
+    addNode(toolNode, 0);
+  }
+
+  for (const node of store.listNodesUsingTool(options.toolId, 'run')) {
+    addNode(node, 0);
+    addEdge({
+      fromId: node.id,
+      kind: 'uses_tool',
+      toId: options.toolId,
+    });
+  }
+
+  for (const node of store.listNodesUsingTool(options.toolId, 'function')) {
+    addNode(node, 0);
+    addEdge({
+      fromId: node.id,
+      kind: 'uses_tool',
+      toId: options.toolId,
+    });
+  }
+
+  for (const hit of nodes.slice(0, limit)) {
+    const neighborKinds =
+      hit.kind === 'function' || hit.kind === 'run'
+        ? TRACE_EDGE_KINDS
+        : REPO_EDGE_KINDS;
+    for (const { edge, node: neighbor } of store
+      .getNeighbors(hit.id, neighborKinds)
+      .slice(0, 10)) {
+      addEdge(edge);
+      if (!seenNodeIds.has(neighbor.id) && nodes.length < limit * 2) {
+        addNode(neighbor, 0);
       }
     }
   }
@@ -114,7 +214,9 @@ export function getSubgraph(
     const edgeKinds =
       node.kind === 'tool' || node.kind === 'server'
         ? TOOL_EDGE_KINDS
-        : REPO_EDGE_KINDS;
+        : node.kind === 'function' || node.kind === 'run'
+          ? TRACE_EDGE_KINDS
+          : REPO_EDGE_KINDS;
 
     for (const { edge, node: neighbor } of store.getNeighbors(
       current.id,
@@ -136,6 +238,45 @@ export function getSubgraph(
   }
 
   return trimSubgraph({ bytes: 0, edges, nodes }, maxBytes);
+}
+
+export function findFunctionsUsingTool(
+  store: GraphStore,
+  toolId: string
+): ContextSearchHit[] {
+  return store.listNodesUsingTool(toolId, 'function').map((node) => ({
+    attrs: node.attrs,
+    id: node.id,
+    kind: node.kind,
+    name: node.name,
+    score: 1,
+  }));
+}
+
+export function findRunsUsingTool(
+  store: GraphStore,
+  toolId: string
+): ContextSearchHit[] {
+  return store.listNodesUsingTool(toolId, 'run').map((node) => ({
+    attrs: node.attrs,
+    id: node.id,
+    kind: node.kind,
+    name: node.name,
+    score: 1,
+  }));
+}
+
+export function findSimilarFunctions(
+  store: GraphStore,
+  requiredTools: string[]
+): ContextSearchHit[] {
+  return store.listFunctionsWithTools(requiredTools).map((node) => ({
+    attrs: node.attrs,
+    id: node.id,
+    kind: node.kind,
+    name: node.name,
+    score: 1,
+  }));
 }
 
 export function searchToolsInGraph(
@@ -181,6 +322,10 @@ function nodeToHit(
       node.srcStart,
       node.srcEnd
     );
+  }
+
+  if (Object.keys(node.attrs).length > 0) {
+    hit.attrs = node.attrs;
   }
 
   return hit;

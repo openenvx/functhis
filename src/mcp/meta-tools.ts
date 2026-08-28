@@ -4,10 +4,12 @@ import * as z from 'zod/v4';
 import { resolvePackageDir } from '../packages/install';
 import { isPackageToolId } from '../packages/paths';
 import { assertToolAllowed } from '../policy/access';
+import { detectCandidates } from '../trace/candidates';
 import { compileTrace } from '../trace/compile';
 import { formatInspectReport, formatTraceListReport } from '../trace/inspect';
 import { prepareCallOutput } from '../trace/recorder';
 import { computeGatewayStats } from '../trace/stats';
+import { resolveMcpClientLabel } from './client-info';
 import {
   buildCallResponse,
   buildGatewayErrorResponse,
@@ -196,6 +198,7 @@ export function registerMetaTools(
 
       try {
         await deps.recorder.ensureRun({
+          client: resolveMcpClientLabel(deps.server),
           newRun,
           runId,
           sessionId,
@@ -462,6 +465,47 @@ export function registerMetaTools(
           name,
         });
         return buildCallResponse(brief);
+      } catch (error) {
+        return buildGatewayErrorResponse(
+          error instanceof Error ? error.message : String(error)
+        );
+      }
+    }
+  );
+
+  server.registerTool(
+    'fn_candidates',
+    {
+      description:
+        'Detect repeated trace patterns that may be worth compiling into reusable function packages. Suggestions only — no automatic codegen.',
+      inputSchema: z.object({
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(50)
+          .optional()
+          .describe('Maximum candidates to return (default 20)'),
+        minOccurrences: z
+          .number()
+          .int()
+          .min(2)
+          .max(20)
+          .optional()
+          .describe('Minimum matching traces required (default 2)'),
+      }),
+    },
+    async ({ limit, minOccurrences }) => {
+      try {
+        const candidates = await detectCandidates(deps.configDir, {
+          limit,
+          minOccurrences,
+        });
+        return buildCallResponse({
+          candidates,
+          labels: { occurrenceCount: 'observed', signals: 'deterministic' },
+          total: candidates.length,
+        });
       } catch (error) {
         return buildGatewayErrorResponse(
           error instanceof Error ? error.message : String(error)

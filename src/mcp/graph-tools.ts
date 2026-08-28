@@ -2,6 +2,11 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 
 import {
+  canHotRegister,
+  classifyPackageWrites,
+  hasWriteCapabilities,
+} from '../packages/capabilities';
+import {
   formatInspectReport as formatPackageInspectReport,
   installPackageFromPath,
 } from '../packages/install';
@@ -71,13 +76,27 @@ export function registerGraphAndSandboxTools(
     'fn_search_context',
     {
       description:
-        'Search the repository knowledge graph and return a compact subgraph with excerpts.',
+        'Search the repository, function, and trace knowledge graph and return a compact subgraph with excerpts.',
       inputSchema: z.object({
         limit: z.number().int().min(1).max(30).optional(),
-        query: z.string(),
+        query: z.string().optional(),
+        requiredTools: z
+          .array(z.string())
+          .optional()
+          .describe('Find saved functions that use all listed tools'),
+        schemaDrift: z
+          .boolean()
+          .optional()
+          .describe('List saved functions with lockfile schema drift'),
+        toolId: z
+          .string()
+          .optional()
+          .describe(
+            'Find functions/runs using a tool, or combine with query for symbol+tool search'
+          ),
       }),
     },
-    async ({ query, limit }) => {
+    async ({ query, limit, toolId, requiredTools, schemaDrift }) => {
       if (!deps.graph) {
         return {
           content: [
@@ -89,6 +108,79 @@ export function registerGraphAndSandboxTools(
           isError: true,
         };
       }
+
+      if (schemaDrift) {
+        const impacts = await deps.graph.schemaDriftImpact(deps.manager, {
+          toolId,
+        });
+        return {
+          content: [
+            {
+              text: JSON.stringify({ impacts, total: impacts.length }, null, 2),
+              type: 'text' as const,
+            },
+          ],
+        };
+      }
+
+      if (toolId && query) {
+        const result = deps.graph.searchSymbolAndTool({
+          limit,
+          query,
+          toolId,
+        });
+        return {
+          content: [
+            {
+              text: JSON.stringify(result, null, 2),
+              type: 'text' as const,
+            },
+          ],
+        };
+      }
+
+      if (toolId) {
+        const nodes = [
+          ...deps.graph.functionsUsingTool(toolId),
+          ...deps.graph.runsUsingTool(toolId),
+        ];
+        return {
+          content: [
+            {
+              text: JSON.stringify({ bytes: 0, edges: [], nodes }, null, 2),
+              type: 'text' as const,
+            },
+          ],
+        };
+      }
+
+      if (requiredTools && requiredTools.length > 0) {
+        const nodes = deps.graph.similarFunctions(requiredTools);
+        return {
+          content: [
+            {
+              text: JSON.stringify({ bytes: 0, edges: [], nodes }, null, 2),
+              type: 'text' as const,
+            },
+          ],
+        };
+      }
+
+      if (!query) {
+        return {
+          content: [
+            {
+              text: JSON.stringify({
+                error:
+                  'Provide query, toolId, requiredTools, or schemaDrift: true',
+              }),
+              type: 'text' as const,
+            },
+          ],
+          isError: true,
+        };
+      }
+
       const result = deps.graph.searchContext(query, { limit });
       return {
         content: [
@@ -266,11 +358,19 @@ export function registerGraphAndSandboxTools(
         'Save a sandbox function as a portable package (function.ts + functhis.json + functhis.lock).',
       inputSchema: z.object({
         allowedTools: z.array(z.string()).min(1),
+        approveWrites: z
+          .boolean()
+          .optional()
+          .describe('Required when saving write-capable functions'),
         compiledFrom: z
           .string()
           .optional()
           .describe('Source trace run id when compiling from a trace'),
         description: z.string(),
+        dryRun: z
+          .boolean()
+          .optional()
+          .describe('Preview save without writing files'),
         inputSchema: z.record(z.string(), z.unknown()).optional(),
         name: z.string(),
         outputSchema: z.record(z.string(), z.unknown()).optional(),
@@ -285,16 +385,52 @@ export function registerGraphAndSandboxTools(
       inputSchema,
       outputSchema,
       compiledFrom,
+      approveWrites,
+      dryRun,
     }) => {
+      const writes = classifyPackageWrites(deps.manager, allowedTools);
+      const writeCapable = hasWriteCapabilities(deps.manager, allowedTools);
+
+      if (writeCapable && !approveWrites && !dryRun) {
+        return buildGatewayErrorResponse(
+          'Write-capable function requires approveWrites: true or dryRun: true to preview before saving.'
+        );
+      }
+
+      const similar = deps.graph?.similarFunctions(allowedTools) ?? [];
+      const duplicates = similar.filter((hit) => hit.name !== name);
+      const capabilities = allowedTools.map((toolId) => {
+        const tool = deps.manager.catalog.getTool(toolId);
+        return {
+          risk: tool?.risk ?? 'unknown',
+          toolId,
+        };
+      });
+
+      if (dryRun) {
+        return buildCallResponse({
+          capabilities,
+          dryRun: true,
+          duplicates: duplicates.map((hit) => ({
+            id: hit.id,
+            name: hit.name,
+          })),
+          name,
+          writes,
+        });
+      }
+
       const packageDir = await savePackage(deps.manager, {
         allowedTools,
         compiledFrom,
+        configDir: deps.configDir,
         description,
         inputSchema,
         name,
         outputSchema,
         packagesRoot: deps.packagesDir,
         source,
+        writes,
       });
       const { lock, manifest } = await loadPackage(packageDir);
       deps.graph?.indexFunction(manifest, lock, {
@@ -302,13 +438,29 @@ export function registerGraphAndSandboxTools(
         packageDir,
       });
       await deps.packageLibrary.reload(deps.packagesDir);
-      if (deps.server && manifest.capabilities.writes === 'deny') {
-        hotRegisterPackage(deps.server, deps, name);
-      }
+      const mcpServer = deps.server;
+      const hotRegistered =
+        mcpServer && canHotRegister(manifest)
+          ? hotRegisterPackage(mcpServer, deps, name)
+          : false;
       return {
         content: [
           {
-            text: JSON.stringify({ name, packageDir, saved: true }, null, 2),
+            text: JSON.stringify(
+              {
+                duplicates: duplicates.map((hit) => ({
+                  id: hit.id,
+                  name: hit.name,
+                })),
+                hotRegistered,
+                name,
+                packageDir,
+                saved: true,
+                writes: manifest.capabilities.writes,
+              },
+              null,
+              2
+            ),
             type: 'text' as const,
           },
         ],
@@ -334,7 +486,10 @@ export function registerGraphAndSandboxTools(
       });
       await deps.packageLibrary.reload(deps.packagesDir);
       if (deps.server) {
-        hotRegisterPackage(deps.server, deps, installed.name);
+        const pkg = deps.packageLibrary.get(installed.name);
+        if (pkg && canHotRegister(pkg.manifest)) {
+          hotRegisterPackage(deps.server, deps, installed.name);
+        }
       }
       return {
         content: [
@@ -432,6 +587,30 @@ export function registerGraphAndSandboxTools(
           packageDir,
           source,
         });
+
+        if (name) {
+          try {
+            await deps.recorder.ensureRun({ newRun: true });
+            await deps.recorder.recordCall({
+              arguments: {
+                mode: mode ?? 'replay',
+                name,
+                status: report.status,
+              },
+              durationMs: report.compiled.durationMs,
+              endedAt: new Date().toISOString(),
+              startedAt: new Date().toISOString(),
+              status:
+                report.status === 'verified locally' ? 'succeeded' : 'failed',
+              toolFingerprint: `verify:${name}`,
+              toolId: 'fn_test_function',
+            });
+            await deps.recorder.finalizeCurrentRun();
+          } catch {
+            // stats recording is best-effort
+          }
+        }
+
         return {
           content: [
             {

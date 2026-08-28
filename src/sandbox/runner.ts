@@ -41,10 +41,8 @@ export async function executeSandboxCode(
 
   const childPath = join(import.meta.dirname, 'child-worker.js');
 
-  let finishResolve!: (result: SandboxExecuteResult) => void;
-  const promise = new Promise<SandboxExecuteResult>((resolve) => {
-    finishResolve = resolve;
-  });
+  const { promise, resolve: finishResolve } =
+    Promise.withResolvers<SandboxExecuteResult>();
 
   const child: ChildProcess = fork(childPath, [], {
     env: {},

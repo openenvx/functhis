@@ -89,6 +89,7 @@ export class TraceRecorder {
     if (options?.runId) {
       if (this.currentTrace?.id === options.runId) {
         this.assertRunNotExpired(this.currentTrace);
+        this.applyRunMetadata(this.currentTrace, options);
         return this.currentTrace;
       }
       const loaded = await loadTrace(this.configDir, options.runId);
@@ -98,11 +99,17 @@ export class TraceRecorder {
         );
       }
       this.currentTrace = loaded;
+      if (this.applyRunMetadata(this.currentTrace, options)) {
+        await this.persist(this.currentTrace);
+      }
       return loaded;
     }
 
     if (this.currentTrace) {
       this.assertRunNotExpired(this.currentTrace);
+      if (this.applyRunMetadata(this.currentTrace, options)) {
+        await this.persist(this.currentTrace);
+      }
       return this.currentTrace;
     }
 
@@ -257,6 +264,26 @@ export class TraceRecorder {
       status: 'running',
       toolFingerprints: {},
     };
+  }
+
+  private applyRunMetadata(
+    trace: ExecutionTrace,
+    options?: EnsureRunOptions
+  ): boolean {
+    let changed = false;
+    if (options?.client && !trace.client) {
+      trace.client = options.client;
+      changed = true;
+    }
+    if (options?.sessionId && !trace.sessionId) {
+      trace.sessionId = options.sessionId;
+      changed = true;
+    }
+    if (options?.skillId && !trace.skillId) {
+      trace.skillId = options.skillId;
+      changed = true;
+    }
+    return changed;
   }
 
   private assertRunNotExpired(trace: ExecutionTrace): void {

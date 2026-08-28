@@ -26,7 +26,25 @@ export interface FunctionStats {
   averageDurationMs: number;
   estimatedContextTokensAvoided: number;
   estimatedIntermediateBytesAvoided: number;
+  estimatedUpstreamCallsAvoided: number;
   functionName: string;
+  invocations: {
+    packageUsed: number;
+    verification: {
+      live: number;
+      replay: number;
+    };
+  };
+  labels: {
+    averageDurationMs: 'observed';
+    estimatedContextTokensAvoided: 'estimated';
+    estimatedIntermediateBytesAvoided: 'estimated';
+    estimatedUpstreamCallsAvoided: 'estimated';
+    underlyingCalls: 'observed' | 'estimated';
+    used: 'observed';
+    verificationLive: 'observed';
+    verificationReplay: 'observed';
+  };
   schemaStatus: 'compatible' | 'unknown';
   underlyingCalls: number;
   used: number;
@@ -144,30 +162,77 @@ function estimateDirectSchemaTokens(catalogToolCount: number): number {
   );
 }
 
+function countVerificationRuns(
+  traces: Awaited<ReturnType<typeof listTraces>>,
+  functionName: string
+): { live: number; replay: number } {
+  let live = 0;
+  let replay = 0;
+
+  for (const trace of traces) {
+    for (const call of trace.calls) {
+      if (call.toolId !== 'fn_test_function' || call.status !== 'succeeded') {
+        continue;
+      }
+      const name = call.arguments.name;
+      if (name !== functionName) {
+        continue;
+      }
+      if (call.arguments.mode === 'live') {
+        live += 1;
+      } else {
+        replay += 1;
+      }
+    }
+  }
+
+  return { live, replay };
+}
+
 export async function computeFunctionStats(
   configDir: string,
   functionName: string,
   options: { underlyingCalls?: number } = {}
 ): Promise<FunctionStats> {
+  const traces = await listTraces(configDir);
   const summary = await computeStats(configDir, {
     functionName,
     packageNames: new Set([functionName]),
   });
   const used = summary.packageCalls;
+  const underlyingCalls = options.underlyingCalls ?? 0;
+  const verification = countVerificationRuns(traces, functionName);
   const averageDurationMs =
     used > 0 ? Math.round(summary.totalDurationMs / used) : 0;
   const estimatedIntermediateBytesAvoided = summary.estimatedResultBytesSaved;
   const estimatedContextTokensAvoided = Math.ceil(
     estimatedIntermediateBytesAvoided / 4
   );
+  const estimatedUpstreamCallsAvoided =
+    underlyingCalls > 0 ? used * underlyingCalls : 0;
 
   return {
     averageDurationMs,
     estimatedContextTokensAvoided,
     estimatedIntermediateBytesAvoided,
+    estimatedUpstreamCallsAvoided,
     functionName,
+    invocations: {
+      packageUsed: used,
+      verification,
+    },
+    labels: {
+      averageDurationMs: 'observed',
+      estimatedContextTokensAvoided: 'estimated',
+      estimatedIntermediateBytesAvoided: 'estimated',
+      estimatedUpstreamCallsAvoided: 'estimated',
+      underlyingCalls: underlyingCalls > 0 ? 'observed' : 'estimated',
+      used: 'observed',
+      verificationLive: 'observed',
+      verificationReplay: 'observed',
+    },
     schemaStatus: 'compatible',
-    underlyingCalls: options.underlyingCalls ?? 0,
+    underlyingCalls,
     used,
   };
 }

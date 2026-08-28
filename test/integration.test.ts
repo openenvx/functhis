@@ -189,6 +189,7 @@ export default async function(ctx, input) {
           'fn_install_function',
           'fn_inspect_function',
           'fn_compile_trace',
+          'fn_candidates',
           'fn_test_function',
         ]) {
           expect(names).toContain(tool);

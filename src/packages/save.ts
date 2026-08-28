@@ -2,13 +2,17 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { schemaHash } from '../catalog/fingerprint';
+import { analyzeDataflow } from '../trace/dataflow';
+import { loadTrace } from '../trace/store';
 import type { UpstreamManager } from '../upstream/manager';
+import { classifyPackageWrites } from './capabilities';
 import type { PackageLock, PackageManifest } from './schema';
 import { packageLockSchema, packageManifestSchema } from './schema';
 
 export interface SavePackageOptions {
   allowedTools: string[];
   compiledFrom?: string;
+  configDir?: string;
   description: string;
   inputSchema?: Record<string, unknown>;
   name: string;
@@ -25,7 +29,8 @@ export async function savePackage(
   const manifest: PackageManifest = packageManifestSchema.parse({
     capabilities: {
       tools: options.allowedTools,
-      writes: options.writes ?? 'deny',
+      writes:
+        options.writes ?? classifyPackageWrites(manager, options.allowedTools),
     },
     compiledFrom: options.compiledFrom,
     description: options.description,
@@ -83,7 +88,55 @@ export async function savePackage(
     'utf-8'
   );
 
+  if (options.compiledFrom && options.configDir) {
+    await writeReplayFixture(
+      packageDir,
+      options.configDir,
+      options.compiledFrom
+    );
+  }
+
   return packageDir;
+}
+
+async function writeReplayFixture(
+  packageDir: string,
+  configDir: string,
+  compiledFrom: string
+): Promise<void> {
+  const trace = await loadTrace(configDir, compiledFrom);
+  const analysis = analyzeDataflow(trace);
+  const input: Record<string, unknown> = {};
+  for (const call of analysis.calls) {
+    for (const arg of call.arguments) {
+      if (arg.classification === 'input' && arg.valuePreview) {
+        try {
+          input[arg.key] = JSON.parse(arg.valuePreview);
+        } catch {
+          // skip non-json previews
+        }
+      }
+    }
+  }
+
+  const finalCall = trace.calls.find(
+    (call) => call.address === analysis.finalOutputAddress
+  );
+
+  await writeFile(
+    join(packageDir, 'tests', 'replay.fixture.json'),
+    `${JSON.stringify(
+      {
+        compiledFrom,
+        input,
+        output: finalCall?.output,
+        toolSequence: analysis.toolSequence,
+      },
+      null,
+      2
+    )}\n`,
+    'utf-8'
+  );
 }
 
 export async function loadPackage(dir: string): Promise<{

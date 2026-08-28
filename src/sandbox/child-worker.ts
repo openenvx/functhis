@@ -74,25 +74,25 @@ function buildToolsProxy(
 async function callParentTool(toolId: string, args: unknown): Promise<unknown> {
   nextCallId += 1;
   const callId = nextCallId;
-  return await new Promise((resolve, reject) => {
-    const onMessage = (response: SandboxParentMessage): void => {
-      if (response.type === 'tool_result' && response.callId === callId) {
-        process.off('message', onMessage);
-        if (response.error) {
-          reject(new Error(response.error));
-        } else {
-          resolve(response.result);
-        }
+  const { promise, resolve, reject } = Promise.withResolvers<unknown>();
+  const onMessage = (response: SandboxParentMessage): void => {
+    if (response.type === 'tool_result' && response.callId === callId) {
+      process.off('message', onMessage);
+      if (response.error) {
+        reject(new Error(response.error));
+      } else {
+        resolve(response.result);
       }
-    };
-    process.on('message', onMessage);
-    process.send?.({
-      args,
-      callId,
-      toolId,
-      type: 'tool_call',
-    } satisfies SandboxChildMessage);
-  });
+    }
+  };
+  process.on('message', onMessage);
+  process.send?.({
+    args,
+    callId,
+    toolId,
+    type: 'tool_call',
+  } satisfies SandboxChildMessage);
+  return promise;
 }
 
 void main();

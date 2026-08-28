@@ -13,7 +13,9 @@ import { runRecall } from './cli/recall';
 import { formatSetupReport, runSetup } from './cli/setup';
 import { runStats } from './cli/stats';
 import {
+  runTracesCandidates,
   runTracesCompile,
+  runTracesCompileGroup,
   runTracesInspect,
   runTracesList,
 } from './cli/traces';
@@ -242,6 +244,50 @@ tracesCmd
           dir: options.dir,
           name: options.name,
           runId,
+        })
+      );
+    }
+  );
+
+tracesCmd
+  .command('candidates')
+  .description('Detect repeated trace patterns worth compiling')
+  .option('--dir <path>', 'Config directory')
+  .option('--limit <n>', 'Maximum candidates to return', '20')
+  .option('--min-occurrences <n>', 'Minimum matching traces', '2')
+  .action(
+    async (options: {
+      dir?: string;
+      limit?: string;
+      minOccurrences?: string;
+    }) => {
+      console.log(
+        await runTracesCandidates({
+          dir: options.dir,
+          limit: Number(options.limit ?? 20),
+          minOccurrences: Number(options.minOccurrences ?? 2),
+        })
+      );
+    }
+  );
+
+tracesCmd
+  .command('compile-group <candidate-id>')
+  .description('Compile compile briefs for every trace in a candidate group')
+  .requiredOption('--name <name>', 'Package name for compiled suggestions')
+  .option('--description <text>', 'Package description')
+  .option('--dir <path>', 'Config directory')
+  .action(
+    async (
+      candidateId: string,
+      options: { description?: string; dir?: string; name: string }
+    ) => {
+      console.log(
+        await runTracesCompileGroup({
+          candidateId,
+          description: options.description,
+          dir: options.dir,
+          name: options.name,
         })
       );
     }

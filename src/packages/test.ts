@@ -10,6 +10,7 @@ import { isPackageToolId } from './paths';
 import { loadPackage } from './save';
 import { packageManifestSchema } from './schema';
 import type { PackageManifest } from './schema';
+import { validateJsonSchemaValue } from './validate-schema';
 
 export type TestMode = 'live' | 'replay';
 
@@ -325,6 +326,37 @@ export async function testFunction(
 
   const resultBytes = estimateUtf8Bytes(result.output);
   const estimatedResultTokens = estimateTokensFromBytes(resultBytes);
+
+  if (manifest.outputSchema) {
+    const schemaErrors = validateJsonSchemaValue(
+      result.output,
+      manifest.outputSchema
+    );
+    if (schemaErrors.length > 0) {
+      return {
+        capabilities,
+        compiled: {
+          agentVisibleCalls: 1,
+          durationMs,
+          estimatedResultTokens,
+          resultBytes,
+        },
+        functionName: manifest.name,
+        labels: {
+          compiledDuration: mode === 'replay' ? 'replayed' : 'observed',
+          compiledResultBytes: mode === 'replay' ? 'replayed' : 'observed',
+          compiledResultTokens: 'estimated',
+          originalDuration: 'observed',
+          originalIntermediateBytes: 'estimated',
+          originalIntermediateTokens: 'estimated',
+        },
+        mode,
+        original,
+        status: 'failed',
+        warnings: [...warnings, ...schemaErrors],
+      };
+    }
+  }
 
   return {
     capabilities,

@@ -27,11 +27,13 @@ export async function runStats(options?: {
     const stats = await computeFunctionStats(configDir, options.functionName);
     return [
       `Function: ${stats.functionName}`,
-      `Used: ${stats.used} times`,
-      `Underlying calls: ${stats.underlyingCalls}`,
-      `Average duration: ${(stats.averageDurationMs / 1000).toFixed(1)} seconds`,
-      `Average intermediate context avoided: ${stats.estimatedIntermediateBytesAvoided} bytes (estimated)`,
-      `Estimated context tokens avoided: ${stats.estimatedContextTokensAvoided}/run (estimated)`,
+      `Used: ${stats.used} times (${stats.labels.used})`,
+      `Verification runs: ${stats.invocations.verification.replay} replayed (${stats.labels.verificationReplay}), ${stats.invocations.verification.live} live (${stats.labels.verificationLive})`,
+      `Underlying calls: ${stats.underlyingCalls} (${stats.labels.underlyingCalls})`,
+      `Estimated upstream calls avoided: ${stats.estimatedUpstreamCallsAvoided} (${stats.labels.estimatedUpstreamCallsAvoided})`,
+      `Average duration: ${(stats.averageDurationMs / 1000).toFixed(1)} seconds (${stats.labels.averageDurationMs})`,
+      `Average intermediate context avoided: ${stats.estimatedIntermediateBytesAvoided} bytes (${stats.labels.estimatedIntermediateBytesAvoided})`,
+      `Estimated context tokens avoided: ${stats.estimatedContextTokensAvoided}/run (${stats.labels.estimatedContextTokensAvoided})`,
       `Schema status: ${stats.schemaStatus}`,
     ].join('\n');
   }

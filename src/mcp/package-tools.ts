@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 
 import type { GraphService } from '../graph/service';
+import { canHotRegister } from '../packages/capabilities';
 import type { PackageLibrary } from '../packages/library';
 import type { SavedPackage } from '../packages/schema';
 import type { TraceRecorder } from '../trace/recorder';
@@ -27,6 +28,9 @@ export function registerPackageTool(
   deps: GatewayDependencies
 ): boolean {
   if (registeredPackageNames.has(pkg.manifest.name)) {
+    return false;
+  }
+  if (!canHotRegister(pkg.manifest)) {
     return false;
   }
 

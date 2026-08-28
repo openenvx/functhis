@@ -292,11 +292,86 @@ export class GraphStore {
     return results;
   }
 
+  listNodesUsingTool(toolId: string, kind: NodeKind): GraphNode[] {
+    const rows = this.db
+      .prepare(
+        `SELECT n.id, n.kind, n.name, n.attrs, n.src_path, n.src_start, n.src_end, n.updated_at
+         FROM nodes n
+         JOIN edges e ON e.from_id = n.id
+         WHERE e.to_id = ? AND e.kind = 'uses_tool' AND n.kind = ?`
+      )
+      .all(toolId, kind) as {
+      attrs: string;
+      id: string;
+      kind: string;
+      name: string;
+      src_end: number | null;
+      src_path: string | null;
+      src_start: number | null;
+      updated_at: number;
+    }[];
+
+    return rows.map((row) => rowToNode(row));
+  }
+
+  listNodesByKind(kind: NodeKind): GraphNode[] {
+    const rows = this.db
+      .prepare(
+        `SELECT id, kind, name, attrs, src_path, src_start, src_end, updated_at
+         FROM nodes WHERE kind = ?`
+      )
+      .all(kind) as {
+      attrs: string;
+      id: string;
+      kind: string;
+      name: string;
+      src_end: number | null;
+      src_path: string | null;
+      src_start: number | null;
+      updated_at: number;
+    }[];
+
+    return rows.map((row) => rowToNode(row));
+  }
+
   listToolIds(): string[] {
     const rows = this.db
       .prepare("SELECT id FROM nodes WHERE kind = 'tool'")
       .all() as { id: string }[];
     return rows.map((row) => row.id);
+  }
+
+  listFunctionsWithTools(requiredTools: string[]): GraphNode[] {
+    if (requiredTools.length === 0) {
+      return [];
+    }
+
+    const placeholders = requiredTools.map(() => '?').join(', ');
+    const rows = this.db
+      .prepare(
+        `SELECT n.id, n.kind, n.name, n.attrs, n.src_path, n.src_start, n.src_end, n.updated_at
+         FROM nodes n
+         WHERE n.kind = 'function'
+           AND (
+             SELECT COUNT(DISTINCT e.to_id)
+             FROM edges e
+             WHERE e.from_id = n.id
+               AND e.kind = 'uses_tool'
+               AND e.to_id IN (${placeholders})
+           ) = ?`
+      )
+      .all(...requiredTools, requiredTools.length) as {
+      attrs: string;
+      id: string;
+      kind: string;
+      name: string;
+      src_end: number | null;
+      src_path: string | null;
+      src_start: number | null;
+      updated_at: number;
+    }[];
+
+    return rows.map((row) => rowToNode(row));
   }
 
   listSchemaFieldNames(): {

@@ -1,4 +1,5 @@
 import { resolveConfigDir } from '../storage/paths';
+import { compileCandidateGroup, detectCandidates } from '../trace/candidates';
 import { compileTrace } from '../trace/compile';
 import { formatInspectReport, formatTraceListReport } from '../trace/inspect';
 
@@ -30,4 +31,31 @@ export async function runTracesCompile(options: {
     name: options.name,
   });
   return JSON.stringify(brief, null, 2);
+}
+
+export async function runTracesCandidates(options?: {
+  dir?: string;
+  limit?: number;
+  minOccurrences?: number;
+}): Promise<string> {
+  const configDir = resolveConfigDir(options?.dir);
+  const candidates = await detectCandidates(configDir, {
+    limit: options?.limit ?? 20,
+    minOccurrences: options?.minOccurrences,
+  });
+  return JSON.stringify({ candidates, total: candidates.length }, null, 2);
+}
+
+export async function runTracesCompileGroup(options: {
+  candidateId: string;
+  description?: string;
+  dir?: string;
+  name: string;
+}): Promise<string> {
+  const configDir = resolveConfigDir(options.dir);
+  const result = await compileCandidateGroup(configDir, options.candidateId, {
+    description: options.description,
+    name: options.name,
+  });
+  return JSON.stringify(result, null, 2);
 }

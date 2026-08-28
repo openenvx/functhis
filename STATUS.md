@@ -16,12 +16,19 @@
 - Trace recording for sandbox and package calls (sessionized runs)
 - Trace inspect with dataflow (`fn_inspect`, `fn traces`)
 - Trace compile brief + skeleton (`fn_compile_trace`, `fn traces compile`)
+- Repeated-trace detection (`fn_candidates`, `fn traces candidates`, `fn traces compile-group`)
 - Function verification with replay mode (`fn_test_function`, `fn functions test`)
-- Per-function and per-tool stats (`fn_stats --function`, `fn stats --tool`)
+- Output schema validation during verify
+- Replay fixtures on trace-based save (`packages/<name>/tests/replay.fixture.json`)
+- Per-function stats with live vs replay verification counts and labeled estimates
 - Bounded trace retention (`.functhis/settings.json`)
 - Graph nodes for `run`, `function`, and `uses_tool`
+- Cross-kind graph search (`fn_search_context` — code, tools, functions, runs)
+- Graph queries: functions/runs by tool, symbol+tool subgraph, duplicates, schema drift impact
+- Write-capable save safety (`dryRun`, `approveWrites`, `review-required` packages)
 - `fn_describe` for saved packages and upstream tools
-- Hot-register packages after save/install (no gateway restart)
+- Hot-register read-only packages after save/install
+- Auto `client` metadata from MCP `clientInfo`
 - Repo + MCP knowledge graph (`fn_index`, `fn_search_context`)
 - Skill / plugin install with no account
 
@@ -38,15 +45,14 @@ packages/<name>/
   function.ts
   functhis.json
   functhis.lock
+  tests/
 ```
 
 ---
 
-## Next
+## Deferred
 
-| Phase | Work |
-| --- | --- |
-| R3 Detect | `fn_candidates`; suggest repeated traces (no silent codegen) |
-| R4 Measure | Richer per-package live vs replayed stats in graph queries |
+- System-tool tracking for non-gateway native tools
+- Optional hosted package catalog (not required for local use)
 
-Pattern detection is not built yet. See [roadmap.md](roadmap.md) for what's left.
+See [roadmap.md](roadmap.md) for scope boundaries.
