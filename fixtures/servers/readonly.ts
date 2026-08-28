@@ -76,7 +76,7 @@ async function main(): Promise<void> {
   server.registerTool(
     'get_large_payload',
     {
-      description: 'Return a large read-only payload for benchmark tests.',
+      description: 'Return a large read-only payload for integration tests.',
       inputSchema: z.object({
         itemCount: z.number().int().min(1).max(5000).optional(),
       }),

@@ -5,12 +5,15 @@ import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 
 import { FunctionLibrary } from '../functions/library';
 import { getFunctionsDir } from '../functions/paths';
+import { GraphService } from '../graph/service';
+import { PackageLibrary } from '../packages/library';
 import { loadConfig } from '../storage/config';
 import { getConfigPath } from '../storage/paths';
 import { TraceRecorder } from '../trace/recorder';
 import { UpstreamManager } from '../upstream/manager';
 import { registerFunctionTools } from './function-tools';
 import type { GatewayDependencies } from './function-tools';
+import { registerGraphAndSandboxTools } from './graph-tools';
 import { registerMetaTools } from './meta-tools';
 
 export type { GatewayDependencies } from './function-tools';
@@ -27,6 +30,7 @@ export function createGatewayServer(deps: GatewayDependencies): McpServer {
   });
 
   registerMetaTools(server, deps);
+  registerGraphAndSandboxTools(server, deps);
   registerFunctionTools(server, deps);
 
   return server;
@@ -48,11 +52,18 @@ export async function startGateway(
     resolvedOptions.functionsDir
   );
   const library = await FunctionLibrary.load(functionsRoot);
+  const packageLibrary = await PackageLibrary.load(functionsRoot);
+  const graph = new GraphService(configDir);
+
+  if (graph.needsIndex()) {
+    graph.indexRepo({ include: ['src'] });
+  }
 
   const abortController = new AbortController();
   const shutdown = async (): Promise<void> => {
     abortController.abort();
     await recorder.cancelCurrentRun();
+    graph.close();
     await manager.closeAll();
   };
 
@@ -64,14 +75,17 @@ export async function startGateway(
   });
 
   await manager.connectAll(config.upstreams);
+  graph.indexMcp(manager.catalog.getAllTools());
 
   const server = createGatewayServer({
     abortSignal: abortController.signal,
     configDir,
     functionsDir: functionsRoot,
+    graph,
     library,
     manager,
     recorder,
+    packageLibrary,
   });
   const transport = new StdioServerTransport();
   await server.connect(transport);

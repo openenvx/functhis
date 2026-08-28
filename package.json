@@ -2,7 +2,7 @@
   "name": "functhis",
   "version": "0.2.0",
   "private": false,
-  "description": "Turn successful MCP agent work into portable, testable Functions.",
+  "description": "Local MCP gateway with repo knowledge graph, sandboxed TypeScript, and shareable function packages.",
   "homepage": "https://github.com/openenvx/functhis#readme",
   "bugs": {
     "url": "https://github.com/openenvx/functhis/issues"
@@ -29,12 +29,8 @@
     "check-types": "tsc --noEmit",
     "dev": "tsx src/cli.ts",
     "test": "vitest run",
-    "benchmark": "vitest run test/benchmark/schema-tokens.test.ts",
-    "benchmark:llm": "bun scripts/benchmark-llm.ts",
-    "benchmark:llm:quick": "bun scripts/benchmark-llm.ts -- --quick",
-    "benchmark:sync-functions": "bun scripts/benchmark/sync-functions.ts",
     "verify-release": "bash scripts/verify-release.sh",
-    "e2e": "vitest run test/e2e-crystallize.test.ts test/real-servers.test.ts",
+    "e2e": "vitest run test/integration.test.ts test/real-servers.test.ts",
     "check": "ultracite check",
     "fix": "ultracite fix",
     "lint": "ultracite check",
@@ -45,12 +41,14 @@
     "@modelcontextprotocol/client": "^2.0.0",
     "@modelcontextprotocol/server": "^2.0.0",
     "commander": "^14.0.0",
+    "esbuild": "^0.28.2",
     "jmespath": "^0.16.0",
     "minisearch": "^7.1.2",
+    "ts-morph": "^28.0.0",
     "zod": "^4.0.0"
   },
   "devDependencies": {
-    "@cursor/sdk": "^1.0.29",
+    "@types/bun": "^1.4.0",
     "@types/node": "^24.3.0",
     "gpt-tokenizer": "^2.9.0",
     "husky": "^9.1.7",

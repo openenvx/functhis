@@ -1,33 +1,34 @@
-# Crystallization demo
+# Local demo
 
-This repository includes a committed sample Function at [`functions/lookup-user-issues.ts`](../functions/lookup-user-issues.ts) compiled from a two-step read-only trace across two upstream MCP servers (catalog + readonly fixtures).
+Functhis indexes your repo and upstream MCP tools into a SQLite graph, runs sandboxed TypeScript against allowlisted tools, and saves reusable function packages under `functions/`.
 
 ## Skill-driven loop (recommended)
 
-Install the Functhis Skill or plugin. On large or unfamiliar MCP catalogs, the agent:
+Install the Functhis Skill or plugin. The agent:
 
 1. Auto-imports stdio servers from Cursor, Claude, and OpenCode (`fn import`)
 2. Writes the Functhis MCP entry and runs `fn doctor`
-3. Uses `fn_search` → `fn_describe` → `fn_call`
-4. Crystallizes successful read-only paths with `fn_inspect`, `fn_this`, and `fn_test`
-5. Reuses the compiled Function on similar tasks
+3. Indexes the workspace (`fn index` or `fn_index`)
+4. Uses `fn_search_context` / `fn_subgraph` for repo + tool context
+5. Runs one-off logic with `fn_execute_code` or saves packages with `fn_save_function`
 
-Users do not run the CLI for discovery or crystallization.
+## Quick local flow (CI / power users)
 
-## Quick replay (CI / power users)
-
-Requirements: Node.js 22+, `functhis` installed (`npm install -g functhis`).
+Requirements: Node.js 22+, Bun for development.
 
 ```sh
 git clone https://github.com/openenvx/functhis.git
 cd functhis
+bun install
 fn setup --dir .functhis-demo
-fn test lookup-user-issues --dir .functhis-demo --functions-dir ./functions --repeat 30
-fn run lookup-user-issues --dir .functhis-demo --functions-dir ./functions \
-  --input '{"userId":"u2","owner":"openenvx","repo":"functhis"}'
+fn serve --dir .functhis-demo
 ```
 
-Expected: 30 replays pass, fingerprints OK, run output includes user and issue data.
+In another terminal, run integration tests against fixture upstreams:
+
+```sh
+bun run e2e
+```
 
 ## Real MCP servers
 
@@ -52,10 +53,10 @@ The Skill imports existing client configs automatically. To add servers manually
 }
 ```
 
-Environment values are references only — Functhis passes them to child processes but does not persist secret values in traces or fixtures.
+Environment values are references only — Functhis passes them to child processes but does not persist secret values in traces.
 
 ## What this demo does not prove
 
-- Provider-reported full-task token savings (run [docs/BENCHMARK.md](./BENCHMARK.md); schema-only estimates in [benchmarks/m1-discovery.md](../benchmarks/m1-discovery.md))
-- Correctness vs direct MCP exposure at scale
-- Write/mutation workflows (read-only policy only in the public demo)
+- Production-scale correctness vs direct MCP exposure
+- Write/mutation workflows (read-only policy in the public fixtures)
+- Provider-reported full-task cost savings

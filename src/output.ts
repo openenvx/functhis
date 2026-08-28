@@ -1,4 +1,4 @@
-import { applyJmesPath } from './functions/select';
+import { applyJmesPath } from './jmespath';
 import { normalizeCallResult } from './mcp/normalize';
 
 /** Hard cap for trace storage — prevents unbounded disk growth. */

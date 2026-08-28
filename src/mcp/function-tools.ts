@@ -8,8 +8,11 @@ import {
   functionInputsToZod,
 } from '../functions/schema';
 import type { FunctionDefinition } from '../functions/schema';
+import type { GraphService } from '../graph/service';
+import type { PackageLibrary } from '../packages/library';
 import type { TraceRecorder } from '../trace/recorder';
 import type { UpstreamManager } from '../upstream/manager';
+import { invokePackageFunction } from './graph-tools';
 import {
   buildCallResponse,
   buildGatewayErrorResponse,
@@ -23,9 +26,11 @@ export interface GatewayDependencies {
   abortSignal?: AbortSignal;
   configDir: string;
   functionsDir: string;
+  graph?: GraphService;
   library: FunctionLibrary;
   manager: UpstreamManager;
   recorder: TraceRecorder;
+  packageLibrary?: PackageLibrary;
 }
 
 function describeFunction(definition: FunctionDefinition) {
@@ -162,6 +167,24 @@ export function registerFunctionTools(
         });
       }
     );
+  }
+
+  if (deps.packageLibrary) {
+    for (const pkg of deps.packageLibrary.getAll()) {
+      server.registerTool(
+        pkg.manifest.name,
+        {
+          description: `Functhis Function: ${pkg.manifest.description}`,
+          inputSchema: z.object({
+            input: z
+              .record(z.string(), z.unknown())
+              .optional()
+              .describe('Function input'),
+          }),
+        },
+        async ({ input }) => invokePackageFunction(pkg.dir, input ?? {}, deps)
+      );
+    }
   }
 }
 

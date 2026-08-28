@@ -1,9 +1,8 @@
-import { createHash } from 'node:crypto';
-
 import MiniSearch from 'minisearch';
 
 import { classifyToolRisk } from '../policy/access';
 import type { DiscoveredTool } from '../upstream/types';
+import { fingerprintTool } from './fingerprint';
 import { makeToolId } from './namespace';
 
 export interface CatalogSearchHit {
@@ -82,15 +81,4 @@ export class ToolCatalog {
   size(): number {
     return this.tools.size;
   }
-}
-
-function fingerprintTool(
-  name: string,
-  description: string,
-  schema: unknown
-): string {
-  return createHash('sha256')
-    .update(JSON.stringify({ description, name, schema }))
-    .digest('hex')
-    .slice(0, 16);
 }

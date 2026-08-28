@@ -1,84 +1,152 @@
 # Functhis
 
-Functhis is a local MCP gateway and replay runtime. **Install only the Agent Skill** — the agent bootstraps everything else.
+**Functhis turns expensive, multi-step MCP work into small, reusable TypeScript tools.**
 
-It imports your MCP servers, records every gateway call by default, keeps large results out of context, and compiles reusable Functions when you ask.
+Functhis sits between your AI agent and your MCP servers. It indexes your codebase and tool catalog into a compact knowledge graph, runs agent-written TypeScript in a sandbox, and saves working logic as versioned function packages you can replay and share.
 
-**Current release:** `0.2.0` · **Requirements:** Node.js 22+ · **License:** Apache-2.0
+No account, cloud, or telemetry. Everything runs on your machine.
+
+## Why Functhis exists
+
+Agents working with MCP hit three recurring problems:
+
+1. **Context bloat** — Large tool catalogs and fat JSON responses fill the context window before the agent does useful work.
+2. **No repo awareness** — MCP knows about external APIs, not your TypeScript symbols, imports, or how files connect.
+3. **No durable artifacts** — Successful multi-step tool workflows live only in chat history. They cannot be tested, shared, or replayed.
+
+Functhis addresses all three in one local process:
+
+| Problem | Functhis answer |
+| --- | --- |
+| Bloated MCP surface | Single gateway with search, compact schemas, and pointer envelopes for large results |
+| Missing repo context | SQLite knowledge graph of symbols, imports, and MCP tools with FTS search |
+| Throwaway workflows | Sandboxed `fn_execute_code` for one-offs; `fn_save_function` for locked, replayable packages |
+
+## How it works
 
 ```text
-Install Skill only
-    -> agent: fn import, fn setup, fn serve
-    -> fn_search -> fn_describe -> fn_call (recorded automatically)
-    -> say "crystallize" when you want a Function in ./functions/
+Your agent (Cursor, Claude, Codex, …)
+        │
+        ▼
+  Functhis MCP gateway  (fn serve)
+        │
+        ├── Knowledge graph (SQLite)
+        │     repo symbols + MCP tools + edges
+        │
+        ├── Upstream MCP servers
+        │     GitHub, Sentry, your internal tools, …
+        │
+        └── Sandboxed runtime
+              TypeScript → allowlisted tool calls only
+              saved packages under ./functions/
 ```
 
-Local-first: no account, cloud, or telemetry. **Start here:** [INSTALL.md](INSTALL.md)
+**Typical agent loop:**
+
+1. Bootstrap — import existing MCP configs, start the gateway (`fn import`, `fn setup`, `fn serve`)
+2. Orient — index the repo (`fn_index`), search context (`fn_search_context`)
+3. Act — call upstream tools (`fn_call`) or run logic in the sandbox (`fn_execute_code`)
+4. Ship — save a working function as a package (`fn_save_function`) and call it by name later
+
+Install the **Agent Skill** and the agent handles bootstrap for you. See [INSTALL.md](INSTALL.md).
 
 ## Install
 
-**You only install the Skill** (or the plugin that bundles it). You do not run `fn import`, edit MCP JSON, or read CLI docs.
+**Recommended:** install only the Skill (or plugin). The agent installs `fn`, imports your MCP servers, wires the gateway, and runs `fn doctor`.
 
 | Step | You | Agent (via Skill) |
 | --- | --- | --- |
 | 1 | Install Skill / plugin | — |
 | 2 | Open a project, use MCP as usual | Installs `fn` if needed |
 | 3 | Restart MCP client once (if prompted) | Imports servers, wires gateway, `fn doctor` |
-| 4 | Say “crystallize …” when you want a Function | `fn_this` + `fn_test` |
+| 4 | Ask to index, explore, or save a function | `fn_index`, `fn_execute_code`, `fn_save_function` |
 
 Full paths for Cursor, Claude, Codex, and OpenCode: **[INSTALL.md](INSTALL.md)**
 
-## What the Skill does by default
-
-| Behavior | Default |
-| --- | --- |
-| Route MCP through Functhis | Yes — `fn_search` / `fn_call`, not raw MCP tools |
-| Record evidence | Yes — every `fn_call` → `.functhis/runs/` |
-| Compact schemas & results | Yes — pointer envelopes + `fn_select` |
-| Auto-compile Functions | **No** — only when you ask to crystallize |
-
-## Gateway tools (after bootstrap)
-
-| MCP tool | Purpose |
-| --- | --- |
-| `fn_search` | Search Functions first, then upstream catalog |
-| `fn_describe` | Load schemas for selected IDs only |
-| `fn_call` | Invoke tool; large results return a pointer envelope (see [docs/MCP.md](docs/MCP.md)) |
-| `fn_select` / `fn_recall` | Read stored evidence with JMESPath / paging |
-| `fn_stats` | Labeled schema/result savings estimates |
-| `fn_inspect` | Review a captured run |
-| `fn_this` | Compile a run into a Function (on request) |
-| `fn_test` | Replay fixture / drift check |
-| `<function-name>` | Call a compiled Function directly |
-
-## More docs
-
-- [INSTALL.md](INSTALL.md) — skill-only install (start here)
-- [docs/MCP.md](docs/MCP.md) — pointer envelope contract and evidence read API
-- [docs/DEMO.md](docs/DEMO.md) — crystallization demo
-- [FUNCTHIS_ROADMAP.md](FUNCTHIS_ROADMAP.md) — product direction
-- [benchmarks/m1-discovery.md](benchmarks/m1-discovery.md) — schema token estimates (labeled)
-- [docs/BENCHMARK.md](docs/BENCHMARK.md) — FnBench wrap suite (Cursor SDK, provider usage)
-
-## CLI (Skill internal)
-
-Power users and CI may use `fn` directly. The Skill runs bootstrap for normal use.
+### CLI (power users and CI)
 
 ```sh
 npm install -g functhis
-fn doctor
+fn setup
+fn index
 fn serve --functions-dir ./functions
 ```
 
 Reference: [skills/functhis/references/cli.md](skills/functhis/references/cli.md)
 
+## Core capabilities
+
+### Knowledge graph
+
+`fn index` incrementally parses your TypeScript repo (exports, imports, file structure) and merges in MCP tool metadata from connected upstreams. Search returns a **compact subgraph** (~6 KiB) with code excerpts — enough context for the agent without dumping the whole repo.
+
+### MCP gateway
+
+All upstream tools are reachable through Functhis. Discovery (`fn_search`, `fn_describe`), invocation (`fn_call`), and evidence access (`fn_select`, `fn_recall`) go through one gateway with recording, redaction, and compact result envelopes.
+
+### Sandboxed code execution
+
+`fn_execute_code` transpiles and runs TypeScript in an isolated child process. The sandbox:
+
+- Allows only explicitly listed MCP tools (`allowedTools`)
+- Blocks imports, `process`, and network access from user code
+- Enforces timeouts, call limits, and output size caps
+- Routes tool calls through a capability broker on the host
+
+Use this when the agent needs to filter, transform, or combine large tool outputs without pulling everything into context.
+
+### Function packages
+
+`fn_save_function` writes a `functhis.dev/v1` package:
+
+```text
+functions/<name>/
+  function.ts      # entrypoint
+  functhis.json    # manifest (capabilities, schemas, runtime limits)
+  functhis.lock    # tool schema fingerprints
+```
+
+Saved functions appear as first-class MCP tools. `fn_inspect_function` detects schema drift against live upstreams. Packages can be installed from a local path with `fn_install_function`.
+
+## Gateway tools
+
+| MCP tool | Purpose |
+| --- | --- |
+| **Discovery & calls** | |
+| `fn_search` | Search saved functions, graph tools, then upstream catalog |
+| `fn_describe` | Load schemas for selected tool IDs only |
+| `fn_call` | Invoke an upstream tool; large results return a pointer envelope |
+| `fn_select` / `fn_recall` | Read stored evidence with JMESPath / paging |
+| `fn_stats` | Labeled schema and result size estimates |
+| **Knowledge graph** | |
+| `fn_index` | Incrementally index the TypeScript repo into the graph |
+| `fn_search_context` | Search repo + MCP graph; return compact subgraph with excerpts |
+| `fn_subgraph` | Expand explicit graph node IDs |
+| **Sandbox & packages** | |
+| `fn_execute_code` | Run agent-written TypeScript in the sandbox |
+| `fn_save_function` | Save source + lockfile as a function package |
+| `fn_install_function` | Install a package from a local path |
+| `fn_inspect_function` | Compare lockfile schemas to live MCP catalog |
+| `<function-name>` | Call a saved function directly |
+| **Legacy (trace replay)** | |
+| `fn_inspect` | Review a captured run |
+| `fn_this` / `fn_test` | Compile a run into a v2 Function and replay (older format) |
+
+Pointer envelope contract: [docs/MCP.md](docs/MCP.md)
+
 ## Safety
 
 - Unknown and write-classified upstream tools are denied by default
-- Tool descriptions and results are untrusted external data
-- Calls are recorded with recursive redaction and bounded output
-- Generated Functions invoke only declared MCP tools through the constrained runner
-- Tool fingerprints detect drift; replay fails closed
+- Tool descriptions and results are treated as untrusted external data
+- Every gateway call is recorded with recursive redaction and bounded output
+- Sandbox code cannot import modules, access `process`, or call tools outside its allowlist
+- Package lockfiles fingerprint tool schemas; drift is surfaced at inspect time
+
+## More docs
+
+- [INSTALL.md](INSTALL.md) — skill-only install (start here)
+- [docs/MCP.md](docs/MCP.md) — pointer envelope contract and evidence read API
+- [docs/DEMO.md](docs/DEMO.md) — local demo flow and integration tests
 
 ## Development
 
@@ -90,8 +158,8 @@ bun run check-types
 bun run check
 bun run build
 bun run test
+bun run e2e          # integration tests against fixture MCP servers
 bun run verify-release
-bun run e2e
 ```
 
 ## License

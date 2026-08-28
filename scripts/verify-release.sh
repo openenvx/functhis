@@ -16,9 +16,6 @@ bun run build
 echo "==> Test suite"
 bun run test
 
-echo "==> Benchmark"
-bun run benchmark
-
 echo "==> Pack tarball"
 rm -f functhis-*.tgz
 bun pm pack >/dev/null

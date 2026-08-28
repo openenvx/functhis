@@ -6,6 +6,7 @@ import { Command } from 'commander';
 
 import { formatDoctorReport, runDoctor } from './cli/doctor';
 import { runImportAll, runImportFromSources } from './cli/import';
+import { formatIndexReport, runIndex } from './cli/index-cmd';
 import { runInspect } from './cli/inspect';
 import { runRecall } from './cli/recall';
 import { runFunctionCommand } from './cli/run';
@@ -133,6 +134,32 @@ program
         writeClient,
       });
       console.log(formatSetupReport(result));
+    }
+  );
+
+program
+  .command('index')
+  .description(
+    'Incrementally index the TypeScript repository into the knowledge graph'
+  )
+  .option('--dir <path>', 'Functhis config directory')
+  .option('--force', 'Reindex all files regardless of content hash')
+  .option('--root <path>', 'Repository root (default: cwd)')
+  .option('--include <paths...>', 'Path prefixes to include (default: src)')
+  .action(
+    async (options: {
+      dir?: string;
+      force?: boolean;
+      include?: string[];
+      root?: string;
+    }) => {
+      const { report } = await runIndex({
+        dir: options.dir,
+        force: options.force,
+        include: options.include,
+        root: options.root,
+      });
+      console.log(formatIndexReport(report));
     }
   );
 

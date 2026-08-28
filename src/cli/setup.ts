@@ -34,7 +34,7 @@ export function getStarterConfig(): UpstreamsConfig {
         command: catalog.command,
         enabled: true,
         id: 'catalog',
-        label: 'Fake catalog server (benchmark fixture)',
+        label: 'Fake catalog server (fixture)',
         transport: 'stdio',
       },
       {

@@ -7,12 +7,14 @@ import { crystallizeRun } from '../functions/crystallize';
 import { isFunctionToolId } from '../functions/library';
 import type { FunctionSearchHit } from '../functions/library';
 import { runFunctionTest } from '../functions/test';
+import { resolvePackageDir } from '../packages/install';
 import { assertToolAllowed } from '../policy/access';
 import { formatInspectReport } from '../trace/inspect';
 import { prepareCallOutput } from '../trace/recorder';
 import { computeGatewayStats } from '../trace/stats';
 import { describeFunction, invokeFunction } from './function-tools';
 import type { GatewayDependencies } from './function-tools';
+import { invokePackageFunction } from './graph-tools';
 import {
   buildCallResponse,
   buildGatewayErrorResponse,
@@ -42,12 +44,28 @@ export function registerMetaTools(
     },
     async ({ query, limit }) => {
       const max = limit ?? 10;
-      const functionHits: FunctionSearchHit[] = deps.library.search(query, max);
-      const remaining = Math.max(0, max - functionHits.length);
-      const catalogHits =
-        remaining > 0
-          ? deps.manager.catalog
+      const packageHits =
+        deps.packageLibrary?.search(query, max).map((hit) => ({
+          ...hit,
+          kind: 'package' as const,
+        })) ?? [];
+      const remainingAfterPackages = Math.max(0, max - packageHits.length);
+      const functionHits: FunctionSearchHit[] = deps.library.search(
+        query,
+        remainingAfterPackages
+      );
+      const remaining = Math.max(0, remainingAfterPackages - functionHits.length);
+      const graphToolHits =
+        remaining > 0 && deps.graph
+          ? deps.graph
               .searchTools(query, remaining)
+              .map((hit) => ({ ...hit, kind: 'tool' as const }))
+          : [];
+      const remainingAfterGraph = Math.max(0, remaining - graphToolHits.length);
+      const catalogHits =
+        remainingAfterGraph > 0
+          ? deps.manager.catalog
+              .searchTools(query, remainingAfterGraph)
               .map((hit) => ({ ...hit, kind: 'tool' as const }))
           : [];
 
@@ -56,9 +74,15 @@ export function registerMetaTools(
           {
             text: JSON.stringify(
               {
-                hits: [...functionHits, ...catalogHits],
+                hits: [
+                  ...packageHits,
+                  ...functionHits,
+                  ...graphToolHits,
+                  ...catalogHits,
+                ],
                 totalCatalog: deps.manager.catalog.size(),
-                totalFunctions: deps.library.size(),
+                totalFunctions:
+                  deps.library.size() + (deps.packageLibrary?.size() ?? 0),
               },
               null,
               2
@@ -151,6 +175,13 @@ export function registerMetaTools(
       const rawArgs = (toolArgs ?? {}) as Record<string, unknown>;
 
       if (isFunctionToolId(id)) {
+        const packageDir = deps.packageLibrary
+          ? await resolvePackageDir(deps.functionsDir, id)
+          : undefined;
+        if (packageDir) {
+          return invokePackageFunction(packageDir, rawArgs, deps);
+        }
+
         const definition = deps.library.get(id);
         if (!definition) {
           return buildCallResponse({

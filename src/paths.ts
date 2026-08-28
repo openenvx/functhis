@@ -21,7 +21,7 @@ export function findPackageRoot(fromModuleUrl: string): string {
 
 export function fixtureServerPath(
   packageRoot: string,
-  name: 'catalog' | 'fnbench' | 'readonly' | 'slow'
+  name: 'catalog' | 'readonly' | 'slow'
 ): string {
   const built = join(packageRoot, 'dist', 'fixtures', 'servers', `${name}.js`);
   if (existsSync(built)) {
