@@ -8,11 +8,14 @@ import { packageLockSchema, packageManifestSchema } from './schema';
 
 export interface SavePackageOptions {
   allowedTools: string[];
+  compiledFrom?: string;
   description: string;
-  packagesRoot: string;
   inputSchema?: Record<string, unknown>;
   name: string;
+  outputSchema?: Record<string, unknown>;
+  packagesRoot: string;
   source: string;
+  writes?: 'deny' | 'review-required';
 }
 
 export async function savePackage(
@@ -22,8 +25,9 @@ export async function savePackage(
   const manifest: PackageManifest = packageManifestSchema.parse({
     capabilities: {
       tools: options.allowedTools,
-      writes: 'deny',
+      writes: options.writes ?? 'deny',
     },
+    compiledFrom: options.compiledFrom,
     description: options.description,
     entrypoint: 'function.ts',
     inputSchema: options.inputSchema ?? {
@@ -31,6 +35,7 @@ export async function savePackage(
       type: 'object',
     },
     name: options.name,
+    outputSchema: options.outputSchema,
     runtime: {
       maxCalls: 20,
       maxOutputBytes: 6 * 1024,

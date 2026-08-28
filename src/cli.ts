@@ -5,12 +5,18 @@ import { join } from 'node:path';
 import { Command } from 'commander';
 
 import { formatDoctorReport, runDoctor } from './cli/doctor';
+import { runFunctionsTest } from './cli/functions';
 import { runImportAll, runImportFromSources } from './cli/import';
 import { formatIndexReport, runIndex } from './cli/index-cmd';
 import { runInspect } from './cli/inspect';
 import { runRecall } from './cli/recall';
 import { formatSetupReport, runSetup } from './cli/setup';
 import { runStats } from './cli/stats';
+import {
+  runTracesCompile,
+  runTracesInspect,
+  runTracesList,
+} from './cli/traces';
 import { startGateway } from './mcp/gateway';
 import { findPackageRoot } from './paths';
 
@@ -193,6 +199,90 @@ program
     console.log(await runInspect({ dir: options.dir, runId }));
   });
 
+const tracesCmd = program
+  .command('traces')
+  .description('List, inspect, and compile captured gateway traces');
+
+tracesCmd
+  .command('list')
+  .description('List recent captured traces')
+  .option('--dir <path>', 'Config directory')
+  .option('--limit <n>', 'Maximum traces to list', '20')
+  .action(async (options: { dir?: string; limit?: string }) => {
+    console.log(
+      await runTracesList({
+        dir: options.dir,
+        limit: Number(options.limit ?? 20),
+      })
+    );
+  });
+
+tracesCmd
+  .command('inspect <run-id>')
+  .description('Inspect a trace with dataflow details')
+  .option('--dir <path>', 'Config directory')
+  .action(async (runId: string, options: { dir?: string }) => {
+    console.log(await runTracesInspect({ dir: options.dir, runId }));
+  });
+
+tracesCmd
+  .command('compile <run-id>')
+  .description('Compile a trace into a function brief and skeleton')
+  .requiredOption('--name <name>', 'Package name for the compiled function')
+  .option('--description <text>', 'Package description')
+  .option('--dir <path>', 'Config directory')
+  .action(
+    async (
+      runId: string,
+      options: { description?: string; dir?: string; name: string }
+    ) => {
+      console.log(
+        await runTracesCompile({
+          description: options.description,
+          dir: options.dir,
+          name: options.name,
+          runId,
+        })
+      );
+    }
+  );
+
+const functionsCmd = program
+  .command('functions')
+  .description('Test saved function packages');
+
+functionsCmd
+  .command('test <name>')
+  .description('Verify a saved function package locally')
+  .option('--dir <path>', 'Config directory')
+  .option('--packages-dir <path>', 'Packages directory')
+  .option('--mode <mode>', 'replay or live', 'replay')
+  .option('--compiled-from <run-id>', 'Source trace for replay mode')
+  .option('--approve-writes', 'Allow live testing of write-capable tools')
+  .action(
+    async (
+      name: string,
+      options: {
+        approveWrites?: boolean;
+        compiledFrom?: string;
+        dir?: string;
+        mode?: 'live' | 'replay';
+        packagesDir?: string;
+      }
+    ) => {
+      console.log(
+        await runFunctionsTest({
+          approveWrites: options.approveWrites,
+          compiledFrom: options.compiledFrom,
+          dir: options.dir,
+          mode: options.mode,
+          name,
+          packagesDir: options.packagesDir,
+        })
+      );
+    }
+  );
+
 program
   .command('recall <run-id> <address>')
   .description(
@@ -207,9 +297,19 @@ program
   .command('stats')
   .description('Show local run statistics')
   .option('--dir <path>', 'Config directory')
-  .action(async (options: { dir?: string }) => {
-    console.log(await runStats(options));
-  });
+  .option('--function <name>', 'Stats for a saved function package')
+  .option('--tool <id>', 'Stats for an upstream tool id')
+  .action(
+    async (options: { dir?: string; function?: string; tool?: string }) => {
+      console.log(
+        await runStats({
+          dir: options.dir,
+          functionName: options.function,
+          toolId: options.tool,
+        })
+      );
+    }
+  );
 
 try {
   await program.parseAsync(process.argv);

@@ -89,6 +89,7 @@ export interface RecordGatewayCallInput {
   originalBytes?: number;
   output?: unknown;
   refs?: string[];
+  sideEffect?: 'read' | 'write' | 'unknown';
   startedAt: string;
   status: TraceCallStatus;
   toolFingerprint: string;

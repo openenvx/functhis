@@ -13,8 +13,23 @@
 - Sandboxed TypeScript (`fn_execute_code`)
 - Packages (`fn_save_function`, `fn_install_function`, `fn_inspect_function`)
 - Trace recording for upstream `fn_call` (`fn_inspect`, `fn_stats`)
+- Trace recording for sandbox and package calls (sessionized runs)
+- Trace inspect with dataflow (`fn_inspect`, `fn traces`)
+- Trace compile brief + skeleton (`fn_compile_trace`, `fn traces compile`)
+- Function verification with replay mode (`fn_test_function`, `fn functions test`)
+- Per-function and per-tool stats (`fn_stats --function`, `fn stats --tool`)
+- Bounded trace retention (`.functhis/settings.json`)
+- Graph nodes for `run`, `function`, and `uses_tool`
+- `fn_describe` for saved packages and upstream tools
+- Hot-register packages after save/install (no gateway restart)
 - Repo + MCP knowledge graph (`fn_index`, `fn_search_context`)
 - Skill / plugin install with no account
+
+**Workflow:**
+
+```text
+observe → inspect → compile → verify → save → reuse → measure
+```
 
 **Artifact:**
 
@@ -31,9 +46,7 @@ packages/<name>/
 
 | Phase | Work |
 | --- | --- |
-| R1 Observe | Trace sandbox/package calls; sessionize runs; `fn_describe` packages; hot-register after save |
-| R2 Verify | Package fixtures on save; package test runner; graph `function` nodes |
-| R3 Detect | `fn_candidates`; compile repeated traces → package |
-| R4 Measure | Per-package stats (estimated / live) |
+| R3 Detect | `fn_candidates`; suggest repeated traces (no silent codegen) |
+| R4 Measure | Richer per-package live vs replayed stats in graph queries |
 
-Today Functhis is **gateway + sandbox + save file**. Pattern detection and trace compile are not built yet.
+Pattern detection is not built yet. See [roadmap.md](roadmap.md) for what's left.

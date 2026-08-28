@@ -1,6 +1,7 @@
 import { CapabilityBroker } from '../sandbox/broker';
 import type { SandboxExecuteResult } from '../sandbox/protocol';
 import { executeSandboxCode } from '../sandbox/runner';
+import type { TraceRecorder } from '../trace/recorder';
 import type { UpstreamManager } from '../upstream/manager';
 import { inspectLockDrift } from './install';
 import { loadPackage } from './save';
@@ -10,6 +11,7 @@ export interface RunPackageOptions {
   approveWrites?: boolean;
   input?: Record<string, unknown>;
   packageDir: string;
+  recorder?: TraceRecorder;
   signal?: AbortSignal;
 }
 
@@ -34,6 +36,7 @@ export async function runPackage(
     approveWrites: options.approveWrites,
     maxBytesPerResult: 256 * 1024,
     maxCalls: manifest.runtime.maxCalls,
+    recorder: options.recorder,
     signal: options.signal,
   });
 

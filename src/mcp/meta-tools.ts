@@ -4,16 +4,17 @@ import * as z from 'zod/v4';
 import { resolvePackageDir } from '../packages/install';
 import { isPackageToolId } from '../packages/paths';
 import { assertToolAllowed } from '../policy/access';
-import { formatInspectReport } from '../trace/inspect';
+import { compileTrace } from '../trace/compile';
+import { formatInspectReport, formatTraceListReport } from '../trace/inspect';
 import { prepareCallOutput } from '../trace/recorder';
 import { computeGatewayStats } from '../trace/stats';
-import { invokePackageFunction } from './graph-tools';
 import {
   buildCallResponse,
   buildGatewayErrorResponse,
   recordGatewayCallAndEnvelope,
   respondWithStoredEvidence,
 } from './invoke';
+import { invokePackageFunction } from './package-invoke';
 import type { GatewayDependencies } from './package-tools';
 
 export function registerMetaTools(
@@ -158,15 +159,35 @@ export function registerMetaTools(
           .optional()
           .describe('Start a fresh run instead of continuing the current one'),
         runId: z.string().optional().describe('Attach to an existing run'),
+        sessionId: z
+          .string()
+          .optional()
+          .describe('Optional client session id for trace metadata'),
+        skillId: z
+          .string()
+          .optional()
+          .describe('Optional skill id for trace metadata'),
       }),
     },
-    async ({ id, arguments: toolArgs, runId, newRun, full }) => {
+    async ({
+      id,
+      arguments: toolArgs,
+      runId,
+      newRun,
+      full,
+      sessionId,
+      skillId,
+    }) => {
       const rawArgs = (toolArgs ?? {}) as Record<string, unknown>;
 
       if (isPackageToolId(id)) {
         const packageDir = await resolvePackageDir(deps.packagesDir, id);
         if (packageDir) {
-          return invokePackageFunction(packageDir, rawArgs, deps);
+          return invokePackageFunction(packageDir, rawArgs, deps, {
+            full,
+            newRun,
+            runId,
+          });
         }
         return buildCallResponse({
           error: `Unknown package "${id}". Use fn_search to find saved packages.`,
@@ -174,7 +195,12 @@ export function registerMetaTools(
       }
 
       try {
-        await deps.recorder.ensureRun({ newRun, runId });
+        await deps.recorder.ensureRun({
+          newRun,
+          runId,
+          sessionId,
+          skillId,
+        });
         deps.recorder.assertRunActive();
       } catch (error) {
         return buildGatewayErrorResponse(
@@ -240,6 +266,7 @@ export function registerMetaTools(
             originalBytes: prepared.originalBytes,
             output: prepared.output,
             refs,
+            sideEffect: tool.risk,
             startedAt,
             status: 'succeeded',
             toolFingerprint: tool.fingerprint,
@@ -344,17 +371,36 @@ export function registerMetaTools(
     {
       description:
         'Report local gateway usage and labeled token/byte savings estimates.',
-      inputSchema: z.object({}),
+      inputSchema: z.object({
+        function: z
+          .string()
+          .optional()
+          .describe('Filter stats to a saved function package name'),
+        tool: z
+          .string()
+          .optional()
+          .describe('Filter stats to an upstream tool id'),
+      }),
     },
-    async () => {
+    async ({ function: functionName, tool }) => {
+      const packageNames = new Set(
+        deps.packageLibrary.getAll().map((pkg) => pkg.manifest.name)
+      );
+      const pkg = functionName
+        ? deps.packageLibrary.get(functionName)
+        : undefined;
       const stats = await computeGatewayStats(deps.configDir, {
         catalogToolCount: deps.manager.catalog.size(),
-        catalogTools: deps.manager.catalog.getAllTools().map((tool) => ({
-          description: tool.description,
-          inputSchema: tool.inputSchema,
-          name: tool.name,
+        catalogTools: deps.manager.catalog.getAllTools().map((toolEntry) => ({
+          description: toolEntry.description,
+          inputSchema: toolEntry.inputSchema,
+          name: toolEntry.name,
         })),
+        functionName,
         packageCount: deps.packageLibrary.size(),
+        packageNames,
+        toolId: tool,
+        underlyingCalls: pkg?.manifest.capabilities.tools.length,
       });
       return buildCallResponse(stats);
     }
@@ -363,14 +409,24 @@ export function registerMetaTools(
   server.registerTool(
     'fn_inspect',
     {
-      description: 'Inspect a captured run: status, calls, and fingerprints.',
+      description:
+        'Inspect captured runs. Omit runId to list recent traces; provide runId for dataflow and call details.',
       inputSchema: z.object({
-        runId: z.string().describe('Run id returned by fn_call'),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(50)
+          .optional()
+          .describe('Max traces when listing (default 20)'),
+        runId: z.string().optional().describe('Run id returned by fn_call'),
       }),
     },
-    async ({ runId }) => {
+    async ({ runId, limit }) => {
       try {
-        const report = await formatInspectReport(runId, deps.configDir);
+        const report = runId
+          ? await formatInspectReport(runId, deps.configDir)
+          : await formatTraceListReport(deps.configDir, limit ?? 20);
         return {
           content: [{ text: report, type: 'text' as const }],
         };
@@ -384,6 +440,32 @@ export function registerMetaTools(
           ],
           isError: true,
         };
+      }
+    }
+  );
+
+  server.registerTool(
+    'fn_compile_trace',
+    {
+      description:
+        'Compile a successful gateway trace into a compile brief and TypeScript skeleton for a reusable function package.',
+      inputSchema: z.object({
+        description: z.string().optional(),
+        name: z.string().describe('Package name (lowercase, hyphens allowed)'),
+        runId: z.string().describe('Run id to compile'),
+      }),
+    },
+    async ({ runId, name, description }) => {
+      try {
+        const brief = await compileTrace(deps.configDir, runId, {
+          description,
+          name,
+        });
+        return buildCallResponse(brief);
+      } catch (error) {
+        return buildGatewayErrorResponse(
+          error instanceof Error ? error.message : String(error)
+        );
       }
     }
   );

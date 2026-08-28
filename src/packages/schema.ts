@@ -19,6 +19,7 @@ export const packageRuntimeSchema = z.object({
 
 export const packageManifestSchema = z.object({
   capabilities: packageCapabilitiesSchema,
+  compiledFrom: z.string().optional(),
   description: z.string(),
   entrypoint: z.string().default('function.ts'),
   inputSchema: z.record(z.string(), z.unknown()),

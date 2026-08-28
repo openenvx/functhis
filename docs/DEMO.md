@@ -10,7 +10,7 @@ Install the Functhis Skill or plugin. The agent:
 2. Writes the Functhis MCP entry and runs `fn doctor`
 3. Indexes the workspace (`fn index` or `fn_index`)
 4. Uses `fn_search_context` / `fn_subgraph` for repo + tool context
-5. Runs one-off logic with `fn_execute_code` or saves packages with `fn_save_function`
+5. Runs one-off logic with `fn_execute_code` or compiles traces with `fn_compile_trace` / saves packages with `fn_save_function`
 
 ## Quick local flow (CI / power users)
 
@@ -29,6 +29,16 @@ In another terminal, run integration tests against fixture upstreams:
 ```sh
 bun run e2e
 ```
+
+## Compile a fixture trace
+
+Integration tests cover the full trace-to-function loop:
+
+```text
+fn_call (record trace) → fn_compile_trace → fn_test_function (replay) → fn_save_function → fn_call (package)
+```
+
+Run `bun run test` or `bun run e2e` to exercise this against fixture MCP servers (`fixtures/servers/readonly.ts`).
 
 ## Real MCP servers
 

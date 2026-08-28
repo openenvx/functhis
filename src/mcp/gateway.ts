@@ -34,6 +34,7 @@ export function createGatewayServer(deps: GatewayDependencies): McpServer {
     version: packageJson.version,
   });
 
+  deps.server = server;
   registerMetaTools(server, deps);
   registerGraphAndSandboxTools(server, deps);
   registerPackageTools(server, deps);
@@ -58,6 +59,10 @@ export async function startGateway(
   );
   const packageLibrary = await PackageLibrary.load(packagesRoot);
   const graph = new GraphService(configDir);
+  recorder.setGraph(graph);
+
+  const { pruneTraces } = await import('../trace/retention');
+  await pruneTraces(configDir, { graph });
 
   if (graph.needsIndex()) {
     graph.indexRepo({ include: ['src'] });
@@ -66,6 +71,7 @@ export async function startGateway(
   const abortController = new AbortController();
   const shutdown = async (): Promise<void> => {
     abortController.abort();
+    await recorder.finalizeCurrentRun();
     await recorder.cancelCurrentRun();
     graph.close();
     await manager.closeAll();

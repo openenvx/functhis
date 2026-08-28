@@ -1,6 +1,6 @@
 # Validation gates
 
-Stay on the local Skill + CLI + package path. See [FUNCTHIS_ROADMAP.md](../FUNCTHIS_ROADMAP.md). Do not start Cloud, a hosted runner, or a team registry until later phases are used for real.
+Stay on the local Skill + CLI + package path. See [roadmap.md](../roadmap.md). Do not start Cloud, a hosted runner, or a team registry until later phases are used for real.
 
 ## Continue as local open-source (default)
 
@@ -13,7 +13,7 @@ Stay local if any of:
 
 ## Reposition triggers
 
-From [FUNCTHIS_ROADMAP.md](../FUNCTHIS_ROADMAP.md):
+From [roadmap.md](../roadmap.md):
 
 - **Compiler-first:** saved packages are valuable, MCP aggregation is not → emphasize `fn_save_function` / `fn_inspect_function` / git-owned packages
 - **Gateway-first:** discovery is valuable, saved packages are optional → stay a local gateway unless users commit `packages/`

@@ -46,7 +46,10 @@ Your agent (Cursor, Claude, Codex, …)
 1. Bootstrap — import existing MCP configs, start the gateway (`fn import`, `fn setup`, `fn serve`)
 2. Orient — index the repo (`fn_index`), search context (`fn_search_context`)
 3. Act — call upstream tools (`fn_call`) or run logic in the sandbox (`fn_execute_code`)
-4. Ship — save working code as a package (`fn_save_function`) and call it by name later
+4. Compile — inspect a successful trace (`fn_inspect`), compile to a skeleton (`fn_compile_trace`), verify (`fn_test_function`)
+5. Ship — save working code as a package (`fn_save_function`) and call it by name later
+
+Functhis turns successful agent tool runs into safe, reusable MCP functions. The primary benefit is fewer agent-visible tool calls, less intermediate data in context, fewer model round-trips, and reusable workflows that remain fully local.
 
 Install the **Agent Skill** and the agent handles bootstrap for you. See [INSTALL.md](INSTALL.md).
 
@@ -108,6 +111,19 @@ packages/<name>/
 
 Saved packages appear as first-class MCP tools. `fn_inspect_function` detects schema drift against live upstreams. Packages can be installed from a local path with `fn_install_function`.
 
+### Trace-to-function
+
+Every gateway `fn_call` is recorded locally under `.functhis/runs/`. After a successful multi-step workflow:
+
+1. `fn_inspect` — list traces or inspect dataflow for a `runId`
+2. `fn_compile_trace` — produce a compile brief and TypeScript skeleton (agent-assisted)
+3. `fn_test_function` — verify with replay (read-only) or live read tools
+4. `fn_save_function` — write the package and hot-register it as an MCP tool
+
+CLI equivalents: `fn traces list`, `fn traces compile <run-id> --name <name>`, `fn functions test <name>`.
+
+Token and byte figures are **local estimates** unless a provider reports billing data. Functhis only observes calls routed through its gateway — not shell, native file tools, or MCP servers the client calls directly.
+
 ## Gateway tools
 
 | MCP tool | Purpose |
@@ -117,7 +133,7 @@ Saved packages appear as first-class MCP tools. `fn_inspect_function` detects sc
 | `fn_describe` | Load schemas for selected tool IDs only |
 | `fn_call` | Invoke an upstream tool; large results return a pointer envelope |
 | `fn_select` / `fn_recall` | Read stored evidence with JMESPath / paging |
-| `fn_stats` | Labeled schema and result size estimates |
+| `fn_stats` | Labeled schema/result savings; optional `function` or `tool` filter |
 | **Knowledge graph** |  |
 | `fn_index` | Incrementally index the TypeScript repo into the graph |
 | `fn_search_context` | Search repo + MCP graph; return compact subgraph with excerpts |
@@ -127,9 +143,11 @@ Saved packages appear as first-class MCP tools. `fn_inspect_function` detects sc
 | `fn_save_function` | Save source + lockfile as a package |
 | `fn_install_function` | Install a package from a local path |
 | `fn_inspect_function` | Compare lockfile schemas to live MCP catalog |
+| `fn_compile_trace` | Compile a successful trace into a function brief + skeleton |
+| `fn_test_function` | Verify a package locally (replay or live read tools) |
 | `<package-name>` | Call a saved package directly |
 | **Traces** |  |
-| `fn_inspect` | Review a captured run |
+| `fn_inspect` | List recent traces or inspect dataflow for a `runId` |
 
 Pointer envelope contract: [docs/MCP.md](docs/MCP.md)
 
@@ -140,6 +158,8 @@ Pointer envelope contract: [docs/MCP.md](docs/MCP.md)
 - Every gateway call is recorded with recursive redaction and bounded output
 - Sandbox code cannot import modules, access `process`, or call tools outside its allowlist
 - Package lockfiles fingerprint tool schemas; drift is surfaced at inspect time
+- Write-capable traces require explicit approval for live testing; replay uses recorded evidence only
+- Trace retention is bounded via `.functhis/settings.json` (packages are never auto-deleted)
 
 ## More docs
 
@@ -147,7 +167,7 @@ Pointer envelope contract: [docs/MCP.md](docs/MCP.md)
 - [docs/MCP.md](docs/MCP.md) — pointer envelope contract and evidence read API
 - [docs/DEMO.md](docs/DEMO.md) — local demo flow and integration tests
 - [STATUS.md](STATUS.md) — what is done vs what to build (start here)
-- [FUNCTHIS_ROADMAP.md](FUNCTHIS_ROADMAP.md) — R0–R4 detail
+- [roadmap.md](roadmap.md) — phases, what's left, and polish gaps
 
 ## Development
 
@@ -166,3 +186,5 @@ bun run verify-release
 ## License
 
 Apache-2.0. See [LICENSE](LICENSE).
+
+**Future possibilities:** a hosted package catalog could make sharing easier; the local gateway does not depend on it.

@@ -75,16 +75,16 @@ export default async function(ctx, input) {
         const result = await client.callTool({
           arguments: {
             allowedTools: ['readonly.get_user'],
+            full: true,
+            newRun: true,
             source,
           },
           name: 'fn_execute_code',
         });
         const body = parseToolText(result) as {
-          output?: { name: string; userId: string };
-          status: string;
+          result?: { name: string; userId: string };
         };
-        expect(body.status).toBe('succeeded');
-        expect(body.output).toEqual({ name: 'Ada Lovelace', userId: 'u42' });
+        expect(body.result).toEqual({ name: 'Ada Lovelace', userId: 'u42' });
       });
     });
   }, 30_000);
@@ -120,14 +120,16 @@ export default async function(ctx, input) {
             const runResult = await client.callTool({
               arguments: {
                 arguments: { userId: 'u7' },
+                full: true,
                 id: 'get-user',
+                newRun: true,
               },
               name: 'fn_call',
             });
             const runBody = parseToolText(runResult) as {
-              output?: { userId: string };
+              result?: { userId: string };
             };
-            expect(runBody.output?.userId).toBe('u7');
+            expect(runBody.result?.userId).toBe('u7');
 
             const inspectResult = await client.callTool({
               arguments: { name: 'get-user' },
@@ -137,6 +139,31 @@ export default async function(ctx, input) {
               (entry) => entry.type === 'text'
             )?.text;
             expect(inspectText).toContain('Lock status: OK');
+
+            const listed = await client.listTools();
+            expect(listed.tools.map((tool) => tool.name)).toContain('get-user');
+
+            const traced = await client.callTool({
+              arguments: {
+                arguments: { userId: 'u9' },
+                full: true,
+                id: 'get-user',
+                newRun: true,
+              },
+              name: 'fn_call',
+            });
+            const tracedBody = parseToolText(traced) as { runId?: string };
+            expect(tracedBody.runId).toBeDefined();
+
+            const runInspect = await client.callTool({
+              arguments: { runId: tracedBody.runId },
+              name: 'fn_inspect',
+            });
+            const runInspectText = runInspect.content.find(
+              (entry) => entry.type === 'text'
+            )?.text;
+            expect(runInspectText).toContain('get-user');
+            expect(runInspectText).toContain('readonly.get_user');
           }
         );
       } finally {
@@ -161,10 +188,113 @@ export default async function(ctx, input) {
           'fn_save_function',
           'fn_install_function',
           'fn_inspect_function',
+          'fn_compile_trace',
+          'fn_test_function',
         ]) {
           expect(names).toContain(tool);
         }
       });
     });
   }, 30_000);
+
+  test('compiles a trace into a tested and saved function package', async () => {
+    await withTempConfigDir(async (configDir) => {
+      const configPath = join(configDir, 'upstreams.json');
+      await saveConfig(configPath, testUpstreamConfig());
+      const packagesDir = await mkdtemp(join(tmpdir(), 'functhis-compile-'));
+
+      try {
+        await withGatewayClient(
+          { configPath, cwd: packageRoot, packagesDir },
+          async (client) => {
+            const first = await client.callTool({
+              arguments: {
+                arguments: { userId: 'u42' },
+                full: true,
+                id: 'readonly.get_user',
+                newRun: true,
+              },
+              name: 'fn_call',
+            });
+            const firstBody = parseToolText(first) as { runId?: string };
+            expect(firstBody.runId).toBeDefined();
+
+            const compileResult = await client.callTool({
+              arguments: {
+                name: 'trace-user-issues',
+                runId: firstBody.runId!,
+              },
+              name: 'fn_compile_trace',
+            });
+            const brief = parseToolText(compileResult) as {
+              allowedTools: string[];
+              skeleton: string;
+              suggestedInputs: string[];
+            };
+            expect(brief.allowedTools).toContain('readonly.get_user');
+            expect(brief.skeleton).toContain('input.userId');
+
+            const testResult = await client.callTool({
+              arguments: {
+                allowedTools: brief.allowedTools,
+                compiledFrom: firstBody.runId,
+                input: { userId: 'u42' },
+                mode: 'replay',
+                name: 'trace-user-issues',
+                source: brief.skeleton,
+              },
+              name: 'fn_test_function',
+            });
+            const testText = testResult.content.find(
+              (entry) => entry.type === 'text'
+            )?.text;
+            expect(testText).toContain('Status: verified locally');
+
+            const saveResult = await client.callTool({
+              arguments: {
+                allowedTools: brief.allowedTools,
+                compiledFrom: firstBody.runId,
+                description: 'Compiled from trace',
+                inputSchema: {
+                  properties: { userId: { type: 'string' } },
+                  type: 'object',
+                },
+                name: 'trace-user-issues',
+                source: brief.skeleton,
+              },
+              name: 'fn_save_function',
+            });
+            const saved = parseToolText(saveResult) as { saved: boolean };
+            expect(saved.saved).toBe(true);
+
+            const searchResult = await client.callTool({
+              arguments: { query: 'trace-user-issues' },
+              name: 'fn_search',
+            });
+            const searchBody = parseToolText(searchResult) as {
+              hits: { id: string; kind: string }[];
+            };
+            expect(searchBody.hits[0]?.kind).toBe('package');
+
+            const invokeResult = await client.callTool({
+              arguments: {
+                arguments: { userId: 'u42' },
+                full: true,
+                id: 'trace-user-issues',
+                newRun: true,
+              },
+              name: 'fn_call',
+            });
+            const invokeBody = parseToolText(invokeResult) as {
+              result?: { name?: string; userId?: string };
+            };
+            expect(invokeBody.result?.userId).toBe('u42');
+            expect(invokeBody.result?.name).toBe('Ada Lovelace');
+          }
+        );
+      } finally {
+        await rm(packagesDir, { force: true, recursive: true });
+      }
+    });
+  }, 90_000);
 });

@@ -12,17 +12,22 @@ export const traceCallStatusSchema = z.enum([
   'cancelled',
 ]);
 
+export const sideEffectSchema = z.enum(['read', 'write', 'unknown']);
+
 export const traceCallSchema = z.object({
   address: z.string().regex(ADDRESS_PATTERN),
   arguments: z.record(z.string(), z.unknown()),
   durationMs: z.number().int().nonnegative(),
   endedAt: z.string(),
   error: z.string().optional(),
+  estimatedOutputTokens: z.number().int().nonnegative().optional(),
   id: z.string(),
   originalBytes: z.number().int().positive().optional(),
   output: z.unknown().optional(),
+  outputBytes: z.number().int().nonnegative().optional(),
   refs: z.array(z.string().regex(ADDRESS_PATTERN)).optional(),
   returnedBytes: z.number().int().nonnegative().optional(),
+  sideEffect: sideEffectSchema.optional(),
   startedAt: z.string(),
   status: traceCallStatusSchema,
   storedBytes: z.number().int().nonnegative().optional(),
@@ -33,9 +38,13 @@ export const traceCallSchema = z.object({
 
 export const executionTraceSchema = z.object({
   calls: z.array(traceCallSchema),
+  client: z.string().optional(),
+  cwd: z.string().optional(),
   endedAt: z.string().optional(),
   id: z.string().regex(RUN_ID_PATTERN),
   redactionVersion: z.string(),
+  sessionId: z.string().optional(),
+  skillId: z.string().optional(),
   startedAt: z.string(),
   status: z.enum(['running', 'succeeded', 'failed', 'cancelled']),
   toolFingerprints: z.record(z.string(), z.string()),

@@ -1,7 +1,7 @@
 import { parseToolId } from '../catalog/namespace';
 import { normalizeCallResult } from '../mcp/normalize';
 import { estimateUtf8Bytes } from '../output';
-import { assertToolAllowed } from '../policy/access';
+import { assertToolAllowed, classifyToolRisk } from '../policy/access';
 import { redactValue } from '../redaction/redact';
 import type { TraceRecorder } from '../trace/recorder';
 import type { UpstreamManager } from '../upstream/manager';
@@ -17,6 +17,7 @@ export interface BrokerOptions {
     toolId: string;
   }) => void;
   recorder?: TraceRecorder;
+  replay?: (toolId: string, args: unknown) => unknown | Promise<unknown>;
   signal?: AbortSignal;
 }
 
@@ -54,27 +55,71 @@ export class CapabilityBroker {
       assertToolAllowed(tool, { denyUnknown: true, denyWrite: true });
     }
 
+    const sideEffect = classifyToolRisk(tool.name, tool.description ?? '');
+    const startedAt = new Date().toISOString();
     const startMs = Date.now();
-    const result = await this.manager.callTool(toolId, args, {
-      signal: this.options.signal,
-    });
-    const normalized = normalizeCallResult(result);
-    const redacted = redactValue(normalized);
-    const bytes = estimateUtf8Bytes(redacted);
-    const maxBytes = this.options.maxBytesPerResult ?? 256 * 1024;
-    if (bytes > maxBytes) {
-      throw new Error(
-        `Tool result exceeds sandbox byte limit (${bytes} > ${maxBytes})`
-      );
+
+    try {
+      const result = this.options.replay
+        ? await this.options.replay(toolId, args)
+        : await this.manager.callTool(toolId, args, {
+            signal: this.options.signal,
+          });
+      const normalized = normalizeCallResult(result);
+      const redacted = redactValue(normalized);
+      const bytes = estimateUtf8Bytes(redacted);
+      const maxBytes = this.options.maxBytesPerResult ?? 256 * 1024;
+      if (bytes > maxBytes) {
+        throw new Error(
+          `Tool result exceeds sandbox byte limit (${bytes} > ${maxBytes})`
+        );
+      }
+
+      const durationMs = Date.now() - startMs;
+      this.options.onCall?.({ args, durationMs, toolId });
+
+      if (this.options.recorder) {
+        await this.options.recorder.recordCall({
+          arguments:
+            typeof args === 'object' && args !== null && !Array.isArray(args)
+              ? (args as Record<string, unknown>)
+              : { value: args },
+          durationMs,
+          endedAt: new Date().toISOString(),
+          output: redacted,
+          sideEffect,
+          startedAt,
+          status: 'succeeded',
+          toolFingerprint: tool.fingerprint,
+          toolId,
+        });
+      }
+
+      return redacted;
+    } catch (error) {
+      const durationMs = Date.now() - startMs;
+      const message = error instanceof Error ? error.message : String(error);
+      const status = message.includes('timed out') ? 'timeout' : 'failed';
+
+      if (this.options.recorder) {
+        await this.options.recorder.recordCall({
+          arguments:
+            typeof args === 'object' && args !== null && !Array.isArray(args)
+              ? (args as Record<string, unknown>)
+              : { value: args },
+          durationMs,
+          endedAt: new Date().toISOString(),
+          error: message,
+          sideEffect,
+          startedAt,
+          status,
+          toolFingerprint: tool.fingerprint,
+          toolId,
+        });
+      }
+
+      throw error;
     }
-
-    this.options.onCall?.({
-      args,
-      durationMs: Date.now() - startMs,
-      toolId,
-    });
-
-    return redacted;
   }
 
   buildToolsProxy(): Record<

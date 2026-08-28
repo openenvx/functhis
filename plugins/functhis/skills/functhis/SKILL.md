@@ -50,10 +50,11 @@ Do not guess tool ids. Do not load every upstream schema when the gateway is ava
 
 When the user asks to **save** or **reuse** a workflow:
 
-1. Use **`fn_execute_code`** to build and verify the logic in the sandbox first if needed
-2. **`fn_save_function`** — write `packages/<name>/` (`function.ts`, `functhis.json`, `functhis.lock`)
-3. **`fn_inspect_function`** — confirm lockfile matches live upstream schemas
-4. Prefer that package on similar future tasks
+1. If a recent `runId` exists, use **`fn_compile_trace`** to get a brief and skeleton, then **`fn_test_function`** (`mode: replay` for read-only traces)
+2. Otherwise use **`fn_execute_code`** to build and verify logic in the sandbox first
+3. **`fn_save_function`** — write `packages/<name>/` (`function.ts`, `functhis.json`, `functhis.lock`)
+4. **`fn_inspect_function`** — confirm lockfile matches live upstream schemas
+5. Prefer that package on similar future tasks
 
 Do not run `fn_save_function` after routine tasks unless the user asked. Do not ask the user to run terminal commands. Do not ask them to review generated files unless save or inspect fails.
 

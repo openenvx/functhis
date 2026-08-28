@@ -1,15 +1,20 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 
-import { buildResultEnvelope } from '../output';
 import {
-  formatInspectReport,
+  formatInspectReport as formatPackageInspectReport,
   installPackageFromPath,
 } from '../packages/install';
-import { runPackage } from '../packages/run';
-import { savePackage } from '../packages/save';
+import { savePackage, loadPackage } from '../packages/save';
+import { formatVerificationReport, testFunction } from '../packages/test';
 import { CapabilityBroker } from '../sandbox/broker';
 import { executeSandboxCode } from '../sandbox/runner';
+import {
+  buildCallResponse,
+  buildGatewayErrorResponse,
+  recordGatewayCallAndEnvelope,
+} from './invoke';
+import { hotRegisterPackage } from './package-tools';
 import type { GatewayDependencies } from './package-tools';
 
 export function registerGraphAndSandboxTools(
@@ -141,9 +146,25 @@ export function registerGraphAndSandboxTools(
           .max(16)
           .describe('Namespaced MCP tool ids'),
         approveWrites: z.boolean().optional(),
+        full: z
+          .boolean()
+          .optional()
+          .describe(
+            'Return the full stored body instead of a compact envelope'
+          ),
         input: z.record(z.string(), z.unknown()).optional(),
         maxCalls: z.number().int().positive().optional(),
         maxOutputBytes: z.number().int().positive().optional(),
+        newRun: z
+          .boolean()
+          .optional()
+          .describe(
+            'Start a fresh trace run instead of continuing the current one'
+          ),
+        runId: z
+          .string()
+          .optional()
+          .describe('Attach to an existing trace run'),
         source: z
           .string()
           .describe('TypeScript with export default async function'),
@@ -158,13 +179,29 @@ export function registerGraphAndSandboxTools(
       maxCalls,
       maxOutputBytes,
       approveWrites,
+      runId,
+      newRun,
+      full,
     }) => {
+      try {
+        await deps.recorder.ensureRun({ newRun, runId });
+        deps.recorder.assertRunActive();
+      } catch (error) {
+        return buildGatewayErrorResponse(
+          error instanceof Error ? error.message : String(error)
+        );
+      }
+
       const broker = new CapabilityBroker(deps.manager, {
         allowedTools,
         approveWrites,
         maxCalls,
+        recorder: deps.recorder,
+        signal: deps.abortSignal,
       });
 
+      const startedAt = new Date().toISOString();
+      const startMs = Date.now();
       const result = await executeSandboxCode(broker, {
         allowedTools,
         approveWrites,
@@ -175,27 +212,50 @@ export function registerGraphAndSandboxTools(
         timeoutMs,
       });
 
+      const fingerprint = `sandbox:${allowedTools.sort().join(',')}`;
+      const endedAt = new Date().toISOString();
+      const durationMs = Date.now() - startMs;
+
       if (result.status !== 'succeeded') {
-        return {
-          content: [
-            {
-              text: JSON.stringify(result, null, 2),
-              type: 'text' as const,
-            },
-          ],
-          isError: true,
-        };
+        return recordGatewayCallAndEnvelope(
+          deps.recorder,
+          {
+            arguments: { allowedTools, input: input ?? {}, source },
+            durationMs,
+            endedAt,
+            error: result.error,
+            startedAt,
+            status: result.status === 'timeout' ? 'timeout' : 'failed',
+            toolFingerprint: fingerprint,
+            toolId: 'fn_execute_code',
+          },
+          { full }
+        );
       }
 
-      const { envelope } = buildResultEnvelope(result.output);
-      return {
-        content: [
-          {
-            text: JSON.stringify({ ...result, envelope }, null, 2),
-            type: 'text' as const,
-          },
-        ],
-      };
+      const recorded = await recordGatewayCallAndEnvelope(
+        deps.recorder,
+        {
+          arguments: { allowedTools, input: input ?? {}, source },
+          durationMs,
+          endedAt,
+          output: result.output,
+          startedAt,
+          status: 'succeeded',
+          toolFingerprint: fingerprint,
+          toolId: 'fn_execute_code',
+        },
+        { full }
+      );
+
+      const recordedBody = JSON.parse(
+        recorded.content[0]?.text ?? '{}'
+      ) as Record<string, unknown>;
+      return buildCallResponse({
+        ...recordedBody,
+        calls: result.calls,
+        durationMs: result.durationMs,
+      });
     }
   );
 
@@ -206,22 +266,45 @@ export function registerGraphAndSandboxTools(
         'Save a sandbox function as a portable package (function.ts + functhis.json + functhis.lock).',
       inputSchema: z.object({
         allowedTools: z.array(z.string()).min(1),
+        compiledFrom: z
+          .string()
+          .optional()
+          .describe('Source trace run id when compiling from a trace'),
         description: z.string(),
         inputSchema: z.record(z.string(), z.unknown()).optional(),
         name: z.string(),
+        outputSchema: z.record(z.string(), z.unknown()).optional(),
         source: z.string(),
       }),
     },
-    async ({ source, name, description, allowedTools, inputSchema }) => {
+    async ({
+      source,
+      name,
+      description,
+      allowedTools,
+      inputSchema,
+      outputSchema,
+      compiledFrom,
+    }) => {
       const packageDir = await savePackage(deps.manager, {
         allowedTools,
+        compiledFrom,
         description,
         inputSchema,
         name,
+        outputSchema,
         packagesRoot: deps.packagesDir,
         source,
       });
+      const { lock, manifest } = await loadPackage(packageDir);
+      deps.graph?.indexFunction(manifest, lock, {
+        compiledFrom,
+        packageDir,
+      });
       await deps.packageLibrary.reload(deps.packagesDir);
+      if (deps.server && manifest.capabilities.writes === 'deny') {
+        hotRegisterPackage(deps.server, deps, name);
+      }
       return {
         content: [
           {
@@ -250,6 +333,9 @@ export function registerGraphAndSandboxTools(
         approve,
       });
       await deps.packageLibrary.reload(deps.packagesDir);
+      if (deps.server) {
+        hotRegisterPackage(deps.server, deps, installed.name);
+      }
       return {
         content: [
           {
@@ -285,48 +371,81 @@ export function registerGraphAndSandboxTools(
           isError: true,
         };
       }
-      const report = await formatInspectReport(deps.manager, packageDir);
+      const report = await formatPackageInspectReport(deps.manager, packageDir);
       return {
         content: [{ text: report, type: 'text' as const }],
       };
     }
   );
-}
 
-export async function invokePackageFunction(
-  packageDir: string,
-  args: Record<string, unknown>,
-  deps: GatewayDependencies
-) {
-  const result = await runPackage(deps.manager, {
-    input: args,
-    packageDir,
-    signal: deps.abortSignal,
-  });
-
-  if (result.status !== 'succeeded') {
-    return {
-      content: [
-        {
-          text: JSON.stringify(result, null, 2),
-          type: 'text' as const,
-        },
-      ],
-      isError: true,
-    };
-  }
-
-  const { envelope } = buildResultEnvelope(result.output);
-  return {
-    content: [
-      {
-        text: JSON.stringify(
-          { envelope, output: result.output, status: result.status },
-          null,
-          2
-        ),
-        type: 'text' as const,
-      },
-    ],
-  };
+  server.registerTool(
+    'fn_test_function',
+    {
+      description:
+        'Verify a function package or source locally. Replay mode uses recorded trace evidence; live mode calls upstream read tools only.',
+      inputSchema: z.object({
+        allowedTools: z.array(z.string()).optional(),
+        approveWrites: z.boolean().optional(),
+        compiledFrom: z.string().optional(),
+        description: z.string().optional(),
+        input: z.record(z.string(), z.unknown()).optional(),
+        inputSchema: z.record(z.string(), z.unknown()).optional(),
+        mode: z.enum(['replay', 'live']).optional(),
+        name: z.string().optional(),
+        outputSchema: z.record(z.string(), z.unknown()).optional(),
+        path: z.string().optional(),
+        source: z.string().optional(),
+      }),
+    },
+    async ({
+      path,
+      name,
+      source,
+      allowedTools,
+      input,
+      inputSchema,
+      outputSchema,
+      description,
+      compiledFrom,
+      mode,
+      approveWrites,
+    }) => {
+      try {
+        const packageDir =
+          path ||
+          (source
+            ? undefined
+            : name
+              ? `${deps.packagesDir}/${name}`
+              : undefined);
+        const report = await testFunction(deps.manager, {
+          allowedTools,
+          approveWrites,
+          compiledFrom,
+          configDir: deps.configDir,
+          description,
+          input,
+          inputSchema,
+          mode,
+          name,
+          outputSchema,
+          packageDir,
+          source,
+        });
+        return {
+          content: [
+            {
+              text: formatVerificationReport(report),
+              type: 'text' as const,
+            },
+          ],
+          isError: report.status !== 'verified locally',
+        };
+      } catch (error) {
+        return buildGatewayErrorResponse(
+          error instanceof Error ? error.message : String(error)
+        );
+      }
+    }
+  );
 }

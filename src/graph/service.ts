@@ -1,9 +1,13 @@
 import { existsSync } from 'node:fs';
 
+import type { PackageManifest, PackageLock } from '../packages/schema';
+import type { ExecutionTrace } from '../trace/schema';
 import type { DiscoveredTool } from '../upstream/types';
+import { indexFunctionNode } from './index-function';
 import { indexMcpTools } from './index-mcp';
 import { indexRepository } from './index-repo';
 import type { IndexRepoOptions } from './index-repo';
+import { indexRunNode } from './index-run';
 import { getGraphDbPath } from './paths';
 import { getSubgraph, searchContext, searchToolsInGraph } from './retrieve';
 import { GraphStore } from './store';
@@ -25,6 +29,22 @@ export class GraphService {
 
   indexMcp(tools: DiscoveredTool[]) {
     return indexMcpTools(this.store, tools);
+  }
+
+  indexRun(trace: ExecutionTrace): void {
+    indexRunNode(this.store, trace);
+  }
+
+  indexFunction(
+    manifest: PackageManifest,
+    lock: PackageLock,
+    options: { compiledFrom?: string; packageDir: string }
+  ): void {
+    indexFunctionNode(this.store, manifest, lock, options);
+  }
+
+  deleteRunNode(runId: string): void {
+    this.store.deleteNode(`run:${runId}`);
   }
 
   searchContext(query: string, options?: Parameters<typeof searchContext>[2]) {
