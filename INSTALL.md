@@ -1,6 +1,6 @@
 # Install Functhis
 
-You only install the **Skill**. The agent handles everything else — CLI install, MCP import, gateway wiring, recording, and (when you ask) saving packages.
+You only install the **Skill**. The agent handles everything else — CLI install, MCP import, gateway wiring, recording, and **autonomous learning** (repeated read-only flows become packages automatically).
 
 **Requirements:** Node.js 22 or newer (the agent uses it to run `fn` locally). No account, cloud, or API key for Functhis itself.
 
@@ -134,7 +134,8 @@ Add to `.gitignore` if you do not want runs in git:
 | No `fn_search` in tools | Restart MCP client once after first bootstrap |
 | Agent still calls GitHub MCP directly | Say: “Route all MCP through Functhis.” Ensure the Skill is active. |
 | `fn import` found zero servers | Configure MCP servers in Cursor first, then ask agent to bootstrap again |
-| Write tools denied | By design — start with read-only tools |
+| Write tools quarantined | Configure `learning.writePolicy: "scoped"` and list tools in `learning.allowedWriteTools` in `.functhis/settings.json` |
+| Learning paused unexpectedly | Run `fn_learning_resume` or delete `.functhis/learning-control.json` |
 | Save failed | Ask agent to retry with a valid package name and allowlisted tools |
 
 For power users and CI, see [skills/functhis/references/cli.md](skills/functhis/references/cli.md) and [docs/DEMO.md](docs/DEMO.md).

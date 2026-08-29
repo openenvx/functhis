@@ -1,8 +1,8 @@
 import { CapabilityBroker } from '../sandbox/broker';
 import type { SandboxExecuteResult } from '../sandbox/protocol';
-import { executeSandboxCode } from '../sandbox/runner';
 import type { TraceRecorder } from '../trace/recorder';
 import type { UpstreamManager } from '../upstream/manager';
+import { executePackageCode } from './execute';
 import { inspectLockDrift } from './install';
 import { loadPackage } from './save';
 import type { PackageManifest } from './schema';
@@ -40,15 +40,19 @@ export async function runPackage(
     signal: options.signal,
   });
 
-  const result = await executeSandboxCode(broker, {
-    allowedTools: manifest.capabilities.tools,
-    approveWrites: options.approveWrites,
-    input: options.input,
-    maxCalls: manifest.runtime.maxCalls,
-    maxOutputBytes: manifest.runtime.maxOutputBytes,
-    source,
-    timeoutMs: manifest.runtime.timeoutMs,
-  });
+  const result = await executePackageCode(
+    broker,
+    {
+      allowedTools: manifest.capabilities.tools,
+      approveWrites: options.approveWrites,
+      input: options.input,
+      maxCalls: manifest.runtime.maxCalls,
+      maxOutputBytes: manifest.runtime.maxOutputBytes,
+      source,
+      timeoutMs: manifest.runtime.timeoutMs,
+    },
+    manifest.runtime.execution
+  );
 
   return { ...result, manifest };
 }

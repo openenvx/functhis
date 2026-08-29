@@ -1,0 +1,12 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "src/cli.ts",
+    "src/mcp/gateway.ts",
+    "src/sandbox/child-worker.ts",
+    "fixtures/servers/*.ts"
+  ],
+  "project": ["src/**/*.ts", "test/**/*.ts", "fixtures/**/*.ts"],
+  "include": ["files", "dependencies", "duplicates"],
+  "ignore": ["dist/**"]
+}

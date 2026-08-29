@@ -1,8 +1,8 @@
 import { fork } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
-import { join } from 'node:path';
 
 import { DEFAULT_CONTEXT_BUDGET_BYTES } from '../output';
+import { invocationForScript, sandboxChildWorkerPath } from '../paths';
 import { prepareCallOutput } from '../trace/recorder';
 import type { CapabilityBroker } from './broker';
 import type {
@@ -15,6 +15,23 @@ import { transpileGuestSource, wrapGuestModule } from './transpile';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const MAX_TIMEOUT_MS = 120_000;
+
+function forkSandboxChild(): ChildProcess {
+  const scriptPath = sandboxChildWorkerPath(import.meta.url);
+  const invocation = invocationForScript(scriptPath);
+  const modulePath = invocation.args.at(-1);
+  if (!modulePath) {
+    throw new Error(`Invalid sandbox child invocation for ${scriptPath}`);
+  }
+  const loaderArgs = invocation.args.slice(0, -1);
+
+  return fork(modulePath, [], {
+    env: {},
+    execArgv: [...loaderArgs, '--permission'],
+    ...(loaderArgs.length > 0 ? { execPath: invocation.command } : {}),
+    stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
+  });
+}
 
 export async function executeSandboxCode(
   broker: CapabilityBroker,
@@ -39,16 +56,10 @@ export async function executeSandboxCode(
     };
   }
 
-  const childPath = join(import.meta.dirname, 'child-worker.js');
-
   const { promise, resolve: finishResolve } =
     Promise.withResolvers<SandboxExecuteResult>();
 
-  const child: ChildProcess = fork(childPath, [], {
-    env: {},
-    execArgv: ['--permission'],
-    stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
-  });
+  const child: ChildProcess = forkSandboxChild();
 
   let settled = false;
   let callCount = 0;

@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { schemaHash } from '../catalog/fingerprint';
@@ -8,6 +8,7 @@ import type { UpstreamManager } from '../upstream/manager';
 import { classifyPackageWrites } from './capabilities';
 import type { PackageLock, PackageManifest } from './schema';
 import { packageLockSchema, packageManifestSchema } from './schema';
+import { loadStagedPackage, promoteStagedPackage, stagePackage } from './stage';
 
 export interface SavePackageOptions {
   allowedTools: string[];
@@ -39,9 +40,11 @@ export async function savePackage(
       properties: {},
       type: 'object',
     },
+    lifecycle: 'active',
     name: options.name,
     outputSchema: options.outputSchema,
     runtime: {
+      execution: 'sandbox',
       maxCalls: 20,
       maxOutputBytes: 6 * 1024,
       timeoutMs: 30_000,
@@ -67,43 +70,37 @@ export async function savePackage(
     version: 1,
   });
 
-  const packageDir = join(options.packagesRoot, options.name);
-  await mkdir(packageDir, { recursive: true });
-  await mkdir(join(packageDir, 'tests'), { recursive: true });
-
-  await writeFile(join(packageDir, 'function.ts'), options.source, 'utf-8');
-  await writeFile(
-    join(packageDir, 'functhis.json'),
-    `${JSON.stringify(manifest, null, 2)}\n`,
-    'utf-8'
-  );
-  await writeFile(
-    join(packageDir, 'functhis.lock'),
-    `${JSON.stringify(lock, null, 2)}\n`,
-    'utf-8'
-  );
-  await writeFile(
-    join(packageDir, 'README.md'),
-    `# ${manifest.name}\n\n${manifest.description}\n`,
-    'utf-8'
-  );
-
+  let replayFixture: Record<string, unknown> | undefined;
   if (options.compiledFrom && options.configDir) {
-    await writeReplayFixture(
-      packageDir,
+    replayFixture = await buildReplayFixture(
       options.configDir,
       options.compiledFrom
     );
   }
 
+  const stageDir = await stagePackage(options.packagesRoot, {
+    functionSource: options.source,
+    lock,
+    manifest,
+    replayFixture,
+  });
+
+  const packageDir = await promoteStagedPackage(
+    options.packagesRoot,
+    stageDir,
+    'active'
+  );
+
+  await mkdir(join(packageDir, 'tests'), { recursive: true });
+  await writePackageReadme(packageDir, manifest);
+
   return packageDir;
 }
 
-async function writeReplayFixture(
-  packageDir: string,
+async function buildReplayFixture(
   configDir: string,
   compiledFrom: string
-): Promise<void> {
+): Promise<Record<string, unknown>> {
   const trace = await loadTrace(configDir, compiledFrom);
   const analysis = analyzeDataflow(trace);
   const input: Record<string, unknown> = {};
@@ -123,18 +120,22 @@ async function writeReplayFixture(
     (call) => call.address === analysis.finalOutputAddress
   );
 
+  return {
+    compiledFrom,
+    input,
+    output: finalCall?.output,
+    toolSequence: analysis.toolSequence,
+  };
+}
+
+async function writePackageReadme(
+  packageDir: string,
+  manifest: PackageManifest
+): Promise<void> {
+  const { writeFile } = await import('node:fs/promises');
   await writeFile(
-    join(packageDir, 'tests', 'replay.fixture.json'),
-    `${JSON.stringify(
-      {
-        compiledFrom,
-        input,
-        output: finalCall?.output,
-        toolSequence: analysis.toolSequence,
-      },
-      null,
-      2
-    )}\n`,
+    join(packageDir, 'README.md'),
+    `# ${manifest.name}\n\n${manifest.description}\n`,
     'utf-8'
   );
 }
@@ -144,12 +145,5 @@ export async function loadPackage(dir: string): Promise<{
   manifest: PackageManifest;
   source: string;
 }> {
-  const manifestRaw = await readFile(join(dir, 'functhis.json'), 'utf-8');
-  const lockRaw = await readFile(join(dir, 'functhis.lock'), 'utf-8');
-  const source = await readFile(join(dir, 'function.ts'), 'utf-8');
-  return {
-    lock: packageLockSchema.parse(JSON.parse(lockRaw)),
-    manifest: packageManifestSchema.parse(JSON.parse(manifestRaw)),
-    source,
-  };
+  return loadStagedPackage(dir);
 }

@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 
 import type { GraphService } from '../graph/service';
+import type { LearningWorker } from '../learning/worker';
 import { canHotRegister } from '../packages/capabilities';
 import type { PackageLibrary } from '../packages/library';
 import type { SavedPackage } from '../packages/schema';
@@ -13,6 +14,7 @@ export interface GatewayDependencies {
   abortSignal?: AbortSignal;
   configDir: string;
   graph?: GraphService;
+  learningWorker?: LearningWorker;
   manager: UpstreamManager;
   packageLibrary: PackageLibrary;
   packagesDir: string;
@@ -51,27 +53,36 @@ export function registerPackageTool(
   return true;
 }
 
-export function hotRegisterPackage(
-  server: McpServer,
-  deps: GatewayDependencies,
-  name: string
-): boolean {
-  const pkg = deps.packageLibrary.get(name);
-  if (!pkg) {
-    return false;
-  }
-  const added = registerPackageTool(server, pkg, deps);
-  if (added) {
-    server.sendToolListChanged();
-  }
-  return added;
-}
-
 export function registerPackageTools(
   server: McpServer,
   deps: GatewayDependencies
 ): void {
-  for (const pkg of deps.packageLibrary.getAll()) {
-    registerPackageTool(server, pkg, deps);
+  reconcilePackageTools(server, deps);
+}
+
+export function reconcilePackageTools(
+  server: McpServer,
+  deps: GatewayDependencies
+): void {
+  const activeNames = new Set(
+    deps.packageLibrary.getInvokable().map((pkg) => pkg.manifest.name)
+  );
+  let changed = false;
+
+  for (const name of registeredPackageNames) {
+    if (!activeNames.has(name)) {
+      registeredPackageNames.delete(name);
+      changed = true;
+    }
+  }
+
+  for (const pkg of deps.packageLibrary.getInvokable()) {
+    if (registerPackageTool(server, pkg, deps)) {
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    server.sendToolListChanged();
   }
 }

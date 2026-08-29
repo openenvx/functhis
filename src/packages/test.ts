@@ -1,10 +1,10 @@
 import { estimateTokensFromBytes, estimateUtf8Bytes } from '../output';
 import { CapabilityBroker } from '../sandbox/broker';
-import { executeSandboxCode } from '../sandbox/runner';
 import { transpileGuestSource } from '../sandbox/transpile';
 import { analyzeDataflow } from '../trace/dataflow';
 import { loadTrace } from '../trace/store';
 import type { UpstreamManager } from '../upstream/manager';
+import { executePackageCode } from './execute';
 import { inspectLockDrift } from './install';
 import { isPackageToolId } from './paths';
 import { loadPackage } from './save';
@@ -284,15 +284,19 @@ export async function testFunction(
   });
 
   const startMs = Date.now();
-  const result = await executeSandboxCode(broker, {
-    allowedTools,
-    approveWrites: options.approveWrites,
-    input: options.input ?? {},
-    maxCalls: manifest.runtime.maxCalls,
-    maxOutputBytes: manifest.runtime.maxOutputBytes,
-    source,
-    timeoutMs: manifest.runtime.timeoutMs,
-  });
+  const result = await executePackageCode(
+    broker,
+    {
+      allowedTools,
+      approveWrites: options.approveWrites,
+      input: options.input ?? {},
+      maxCalls: manifest.runtime.maxCalls,
+      maxOutputBytes: manifest.runtime.maxOutputBytes,
+      source,
+      timeoutMs: manifest.runtime.timeoutMs,
+    },
+    manifest.runtime.execution
+  );
   const durationMs = Date.now() - startMs;
 
   if (original.agentVisibleCalls === 0) {

@@ -3,46 +3,77 @@ import { join } from 'node:path';
 
 import type { SavedPackage } from './schema';
 import { packageLockSchema, packageManifestSchema } from './schema';
+import { readPackageLifecycle } from './stage';
+
+export interface PackageSearchHit {
+  description: string;
+  id: string;
+  kind: 'package';
+  lifecycle: 'active' | 'quarantined' | 'rejected' | 'staging';
+  name: string;
+  score: number;
+  writes: 'deny' | 'review-required';
+}
+
+export async function countPackagesOnDisk(
+  packagesRoot: string
+): Promise<number> {
+  let entries: string[];
+  try {
+    entries = await readdir(packagesRoot);
+  } catch {
+    return 0;
+  }
+
+  let count = 0;
+  for (const entry of entries) {
+    if (entry.startsWith('.')) {
+      continue;
+    }
+    const dir = join(packagesRoot, entry);
+    try {
+      const info = await stat(dir);
+      if (!info.isDirectory()) {
+        continue;
+      }
+      await readFile(join(dir, 'functhis.json'), 'utf-8');
+      count += 1;
+    } catch {
+      // skip non-package entries
+    }
+  }
+  return count;
+}
 
 export class PackageLibrary {
-  private packages = new Map<string, SavedPackage>();
+  private invokable = new Map<string, SavedPackage>();
+  private visible = new Map<string, SavedPackage>();
 
   get(name: string): SavedPackage | undefined {
-    return this.packages.get(name);
+    return this.visible.get(name);
   }
 
   getAll(): SavedPackage[] {
-    return [...this.packages.values()];
+    return [...this.visible.values()];
+  }
+
+  getInvokable(): SavedPackage[] {
+    return [...this.invokable.values()];
   }
 
   size(): number {
-    return this.packages.size;
+    return this.visible.size;
   }
 
-  search(
-    query: string,
-    limit = 10
-  ): {
-    description: string;
-    id: string;
-    kind: 'package';
-    name: string;
-    score: number;
-  }[] {
+  search(query: string, limit = 10): PackageSearchHit[] {
     const normalized = query.trim().toLowerCase();
     if (!normalized) {
       return [];
     }
     const terms = normalized.split(/\s+/u);
-    const hits: {
-      description: string;
-      id: string;
-      kind: 'package';
-      name: string;
-      score: number;
-    }[] = [];
+    const hits: PackageSearchHit[] = [];
 
-    for (const pkg of this.packages.values()) {
+    for (const pkg of this.visible.values()) {
       const haystack =
         `${pkg.manifest.name} ${pkg.manifest.description}`.toLowerCase();
       let score = 0;
@@ -59,8 +90,10 @@ export class PackageLibrary {
           description: pkg.manifest.description,
           id: pkg.manifest.name,
           kind: 'package',
+          lifecycle: pkg.manifest.lifecycle ?? 'active',
           name: pkg.manifest.name,
           score,
+          writes: pkg.manifest.capabilities.writes,
         });
       }
     }
@@ -75,7 +108,8 @@ export class PackageLibrary {
   }
 
   async reload(packagesRoot: string): Promise<void> {
-    this.packages.clear();
+    this.invokable.clear();
+    this.visible.clear();
     await this.loadFromDir(packagesRoot);
   }
 
@@ -88,6 +122,9 @@ export class PackageLibrary {
     }
 
     for (const entry of entries) {
+      if (entry.startsWith('.')) {
+        continue;
+      }
       const dir = join(packagesRoot, entry);
       try {
         const info = await stat(dir);
@@ -97,17 +134,23 @@ export class PackageLibrary {
         const manifestRaw = await readFile(join(dir, 'functhis.json'), 'utf-8');
         const lockRaw = await readFile(join(dir, 'functhis.lock'), 'utf-8');
         const source = await readFile(join(dir, 'function.ts'), 'utf-8');
-        const manifest = packageManifestSchema.parse(JSON.parse(manifestRaw));
+        const manifestJson = JSON.parse(manifestRaw) as Record<string, unknown>;
+        const lifecycle = readPackageLifecycle(manifestJson);
+        const manifest = packageManifestSchema.parse({
+          ...manifestJson,
+          lifecycle,
+        });
         const lock = packageLockSchema.parse(JSON.parse(lockRaw));
-        if (manifest.capabilities.writes !== 'deny') {
-          continue;
-        }
-        this.packages.set(manifest.name, {
+        const saved: SavedPackage = {
           dir,
           lock,
           manifest,
           source,
-        });
+        };
+        this.visible.set(manifest.name, saved);
+        if (lifecycle === 'active') {
+          this.invokable.set(manifest.name, saved);
+        }
       } catch {
         // skip non-package entries
       }

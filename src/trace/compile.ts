@@ -22,10 +22,48 @@ function isUpstreamCall(toolId: string): boolean {
   return toolId.includes('.') && !toolId.startsWith('fn_');
 }
 
-function buildInputSchema(suggestedInputs: string[]): Record<string, unknown> {
+function inferJsonSchemaType(previews: string[]): Record<string, unknown> {
+  const types = new Set<string>();
+  for (const preview of previews) {
+    try {
+      const value = JSON.parse(preview);
+      if (value === null) {
+        types.add('null');
+      } else if (Array.isArray(value)) {
+        types.add('array');
+      } else {
+        types.add(typeof value);
+      }
+    } catch {
+      types.add('string');
+    }
+  }
+
+  if (types.size === 1) {
+    const [type] = [...types];
+    if (type === 'number' || type === 'boolean' || type === 'string') {
+      return { type };
+    }
+    if (type === 'array') {
+      return { items: {}, type: 'array' };
+    }
+    if (type === 'object') {
+      return { type: 'object' };
+    }
+  }
+
+  return { type: 'string' };
+}
+
+function buildInputSchema(
+  suggestedInputs: string[],
+  inputPreviews: Map<string, string[]>
+): Record<string, unknown> {
   const properties: Record<string, unknown> = {};
   for (const key of suggestedInputs) {
-    properties[key] = { type: 'string' };
+    const previews = inputPreviews.get(key) ?? [];
+    properties[key] =
+      previews.length > 0 ? inferJsonSchemaType(previews) : { type: 'string' };
   }
   return {
     properties,
@@ -61,6 +99,7 @@ export function buildCompileBrief(
   const warnings: string[] = [];
   const constants: Record<string, unknown> = {};
   const suggestedInputs = new Set<string>();
+  const inputPreviews = new Map<string, string[]>();
 
   if (!analysis.readOnly) {
     warnings.push(
@@ -76,10 +115,14 @@ export function buildCompileBrief(
     }
   }
 
+  warnings.push(
+    'Repeated read-only flows are auto-crystallized by the gateway when the same pattern occurs twice.'
+  );
+
   const existingSource = extractSandboxSource(trace);
   if (existingSource) {
     warnings.push(
-      'Trace includes fn_execute_code source. Prefer editing that source instead of the generated skeleton.'
+      'Trace includes fn_execute_code source. Using that source as the compiled skeleton.'
     );
   }
 
@@ -87,6 +130,11 @@ export function buildCompileBrief(
     for (const arg of callSummary.arguments) {
       if (arg.classification === 'input') {
         suggestedInputs.add(arg.key);
+        if (arg.valuePreview) {
+          const previews = inputPreviews.get(arg.key) ?? [];
+          previews.push(arg.valuePreview);
+          inputPreviews.set(arg.key, previews);
+        }
       }
       if (arg.classification === 'constant' && arg.valuePreview) {
         try {
@@ -181,7 +229,7 @@ export function buildCompileBrief(
     })),
     constants,
     description,
-    inputSchema: buildInputSchema(inputKeys),
+    inputSchema: buildInputSchema(inputKeys, inputPreviews),
     name: options.name,
     readOnly: analysis.readOnly,
     runId: trace.id,

@@ -1,3 +1,4 @@
+import { resolvesWriteApproval } from '../packages/capabilities';
 import { packageFingerprint } from '../packages/fingerprint';
 import { runPackage } from '../packages/run';
 import { loadPackage } from '../packages/save';
@@ -8,6 +9,7 @@ import {
 import type { GatewayDependencies } from './package-tools';
 
 export interface InvokePackageOptions {
+  approveWrites?: boolean;
   full?: boolean;
   newRun?: boolean;
   runId?: string;
@@ -33,12 +35,39 @@ export async function invokePackageFunction(
 
   const { arguments: resolvedArgs, refs } =
     deps.recorder.resolveArguments(args);
-  const { lock } = await loadPackage(packageDir);
+  const { lock, manifest } = await loadPackage(packageDir);
   const packageFp = packageFingerprint(lock);
   const startedAt = new Date().toISOString();
   const startMs = Date.now();
+  const effectiveApproveWrites = resolvesWriteApproval(
+    manifest,
+    options.approveWrites
+  );
+
+  if (
+    manifest.capabilities.writes === 'review-required' &&
+    !effectiveApproveWrites
+  ) {
+    return recordGatewayCallAndEnvelope(
+      deps.recorder,
+      {
+        arguments: args,
+        durationMs: Date.now() - startMs,
+        endedAt: new Date().toISOString(),
+        error:
+          'Write-capable package requires approveWrites: true. Autonomous write packages are invoked without approval when promoted under learning policy.',
+        refs,
+        startedAt,
+        status: 'denied',
+        toolFingerprint: packageFp,
+        toolId: manifest.name,
+      },
+      { full: options.full }
+    );
+  }
 
   const result = await runPackage(deps.manager, {
+    approveWrites: effectiveApproveWrites,
     input: resolvedArgs,
     packageDir,
     recorder: deps.recorder,

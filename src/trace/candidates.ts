@@ -8,12 +8,15 @@ import { listTraces } from './store';
 
 const DEFAULT_MIN_OCCURRENCES = 2;
 
+export type CandidateMatchKind = 'exact' | 'normalized';
+
 export interface TraceCandidate {
   id: string;
   occurrenceCount: number;
   runIds: string[];
   schemaFingerprints: string[];
   signals: {
+    matchKind: CandidateMatchKind;
     normalizedSequence: string;
     sharedInputShape: boolean;
     sharedToolFingerprints: boolean;
@@ -38,6 +41,16 @@ function upstreamSequence(trace: ExecutionTrace): string[] {
   return analyzeDataflow(trace).toolSequence;
 }
 
+function normalizeSequence(sequence: string[]): string[] {
+  const normalized: string[] = [];
+  for (const toolId of sequence) {
+    if (normalized.at(-1) !== toolId) {
+      normalized.push(toolId);
+    }
+  }
+  return normalized;
+}
+
 function inputKeysForTrace(trace: ExecutionTrace): string[] {
   const analysis = analyzeDataflow(trace);
   const keys = new Set<string>();
@@ -60,6 +73,23 @@ function fingerprintSignature(
     .join('|');
 }
 
+function pickRepresentativeSequence(sequences: string[][]): string[] {
+  const counts = new Map<string, { count: number; sequence: string[] }>();
+  for (const sequence of sequences) {
+    const key = sequence.join('→');
+    const entry = counts.get(key) ?? { count: 0, sequence };
+    entry.count += 1;
+    counts.set(key, entry);
+  }
+
+  return (
+    [...counts.values()].sort((left, right) => right.count - left.count)[0]
+      ?.sequence ??
+    sequences[0] ??
+    []
+  );
+}
+
 export async function detectCandidates(
   configDir: string,
   options: { limit?: number; minOccurrences?: number } = {}
@@ -69,10 +99,11 @@ export async function detectCandidates(
   const groups = new Map<
     string,
     {
+      exactSignatures: Set<string>;
       fingerprints: Set<string>;
       inputShapes: Set<string>;
       runIds: string[];
-      toolSequence: string[];
+      sequences: string[][];
     }
   >();
 
@@ -85,17 +116,24 @@ export async function detectCandidates(
       continue;
     }
 
-    const signature = sequence.join('→');
-    const group = groups.get(signature) ?? {
+    const exactSignature = sequence.join('→');
+    const normalized = normalizeSequence(sequence);
+    const normalizedSignature = normalized.join('→');
+    const groupKey = normalizedSignature;
+
+    const group = groups.get(groupKey) ?? {
+      exactSignatures: new Set<string>(),
       fingerprints: new Set<string>(),
       inputShapes: new Set<string>(),
       runIds: [],
-      toolSequence: sequence,
+      sequences: [],
     };
     group.runIds.push(trace.id);
+    group.sequences.push(sequence);
+    group.exactSignatures.add(exactSignature);
     group.inputShapes.add(inputKeysForTrace(trace).join(','));
     group.fingerprints.add(fingerprintSignature(trace, sequence));
-    groups.set(signature, group);
+    groups.set(groupKey, group);
   }
 
   const candidates: TraceCandidate[] = [];
@@ -107,18 +145,22 @@ export async function detectCandidates(
     const inputShapes = [...group.inputShapes].filter(
       (shape) => shape.length > 0
     );
+    const matchKind: CandidateMatchKind =
+      group.exactSignatures.size === 1 ? 'exact' : 'normalized';
+
     candidates.push({
       id: `cand-${hashSignature(signature)}`,
       occurrenceCount: group.runIds.length,
       runIds: group.runIds,
       schemaFingerprints: [...group.fingerprints],
       signals: {
+        matchKind,
         normalizedSequence: signature,
         sharedInputShape: inputShapes.length <= 1,
         sharedToolFingerprints: group.fingerprints.size <= 1,
       },
       similarInputKeys: inputShapes,
-      toolSequence: group.toolSequence,
+      toolSequence: pickRepresentativeSequence(group.sequences),
     });
   }
 
@@ -162,7 +204,7 @@ export async function compileCandidateGroup(
     suggestions,
     toolSequence: candidate.toolSequence,
     warnings: [
-      'Suggestions only — review each brief before saving. Functhis does not auto-save compiled functions.',
+      'Functhis autonomously crystallizes read-only candidate groups when they repeat. Manual saves still work via fn_save_function.',
     ],
   };
 }

@@ -31,13 +31,32 @@ export async function saveTrace(
   await rename(tempPath, targetPath);
 }
 
+const LOAD_TRACE_RETRY_DELAYS_MS = [10, 25, 50] as const;
+
 export async function loadTrace(
   configDir: string,
   runId: string
 ): Promise<ExecutionTrace> {
-  const path = getRunPath(configDir, runId);
-  const raw = await readFile(path, 'utf-8');
-  return executionTraceSchema.parse(JSON.parse(raw));
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= LOAD_TRACE_RETRY_DELAYS_MS.length; attempt++) {
+    try {
+      const path = getRunPath(configDir, runId);
+      const raw = await readFile(path, 'utf-8');
+      return executionTraceSchema.parse(JSON.parse(raw));
+    } catch (error) {
+      lastError = error;
+      const code = (error as NodeJS.ErrnoException).code;
+      const delay = LOAD_TRACE_RETRY_DELAYS_MS[attempt];
+      if (code === 'ENOENT' && delay !== undefined) {
+        await new Promise((resolve) => {
+          setTimeout(resolve, delay);
+        });
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
 export async function listTraces(configDir: string): Promise<ExecutionTrace[]> {

@@ -17,9 +17,10 @@ import { executeSandboxCode } from '../sandbox/runner';
 import {
   buildCallResponse,
   buildGatewayErrorResponse,
+  finalizeRunIfRequested,
   recordGatewayCallAndEnvelope,
 } from './invoke';
-import { hotRegisterPackage } from './package-tools';
+import { reconcilePackageTools } from './package-tools';
 import type { GatewayDependencies } from './package-tools';
 
 export function registerGraphAndSandboxTools(
@@ -230,7 +231,7 @@ export function registerGraphAndSandboxTools(
     'fn_execute_code',
     {
       description:
-        'Execute agent-written TypeScript in a sandbox. Intermediate MCP results stay in the runtime; only the compact final result returns.',
+        'Execute agent-written TypeScript in an isolated sandbox child process. Always sandboxed.',
       inputSchema: z.object({
         allowedTools: z
           .array(z.string())
@@ -276,78 +277,82 @@ export function registerGraphAndSandboxTools(
       full,
     }) => {
       try {
-        await deps.recorder.ensureRun({ newRun, runId });
-        deps.recorder.assertRunActive();
-      } catch (error) {
-        return buildGatewayErrorResponse(
-          error instanceof Error ? error.message : String(error)
-        );
-      }
+        try {
+          await deps.recorder.ensureRun({ newRun, runId });
+          deps.recorder.assertRunActive();
+        } catch (error) {
+          return buildGatewayErrorResponse(
+            error instanceof Error ? error.message : String(error)
+          );
+        }
 
-      const broker = new CapabilityBroker(deps.manager, {
-        allowedTools,
-        approveWrites,
-        maxCalls,
-        recorder: deps.recorder,
-        signal: deps.abortSignal,
-      });
+        const broker = new CapabilityBroker(deps.manager, {
+          allowedTools,
+          approveWrites,
+          maxCalls,
+          recorder: deps.recorder,
+          signal: deps.abortSignal,
+        });
 
-      const startedAt = new Date().toISOString();
-      const startMs = Date.now();
-      const result = await executeSandboxCode(broker, {
-        allowedTools,
-        approveWrites,
-        input,
-        maxCalls,
-        maxOutputBytes,
-        source,
-        timeoutMs,
-      });
+        const startedAt = new Date().toISOString();
+        const startMs = Date.now();
+        const result = await executeSandboxCode(broker, {
+          allowedTools,
+          approveWrites,
+          input,
+          maxCalls,
+          maxOutputBytes,
+          source,
+          timeoutMs,
+        });
 
-      const fingerprint = `sandbox:${allowedTools.sort().join(',')}`;
-      const endedAt = new Date().toISOString();
-      const durationMs = Date.now() - startMs;
+        const fingerprint = `sandbox:${allowedTools.sort().join(',')}`;
+        const endedAt = new Date().toISOString();
+        const durationMs = Date.now() - startMs;
 
-      if (result.status !== 'succeeded') {
-        return recordGatewayCallAndEnvelope(
+        if (result.status !== 'succeeded') {
+          return await recordGatewayCallAndEnvelope(
+            deps.recorder,
+            {
+              arguments: { allowedTools, input: input ?? {}, source },
+              durationMs,
+              endedAt,
+              error: result.error,
+              startedAt,
+              status: result.status === 'timeout' ? 'timeout' : 'failed',
+              toolFingerprint: fingerprint,
+              toolId: 'fn_execute_code',
+            },
+            { full }
+          );
+        }
+
+        const recorded = await recordGatewayCallAndEnvelope(
           deps.recorder,
           {
             arguments: { allowedTools, input: input ?? {}, source },
             durationMs,
             endedAt,
-            error: result.error,
+            output: result.output,
             startedAt,
-            status: result.status === 'timeout' ? 'timeout' : 'failed',
+            status: 'succeeded',
             toolFingerprint: fingerprint,
             toolId: 'fn_execute_code',
           },
           { full }
         );
+
+        const recordedBody = JSON.parse(
+          recorded.content[0]?.text ?? '{}'
+        ) as Record<string, unknown>;
+        return buildCallResponse({
+          ...recordedBody,
+          calls: result.calls,
+          durationMs: result.durationMs,
+        });
+      } finally {
+        await finalizeRunIfRequested(deps.recorder, newRun);
       }
-
-      const recorded = await recordGatewayCallAndEnvelope(
-        deps.recorder,
-        {
-          arguments: { allowedTools, input: input ?? {}, source },
-          durationMs,
-          endedAt,
-          output: result.output,
-          startedAt,
-          status: 'succeeded',
-          toolFingerprint: fingerprint,
-          toolId: 'fn_execute_code',
-        },
-        { full }
-      );
-
-      const recordedBody = JSON.parse(
-        recorded.content[0]?.text ?? '{}'
-      ) as Record<string, unknown>;
-      return buildCallResponse({
-        ...recordedBody,
-        calls: result.calls,
-        durationMs: result.durationMs,
-      });
     }
   );
 
@@ -438,29 +443,34 @@ export function registerGraphAndSandboxTools(
         packageDir,
       });
       await deps.packageLibrary.reload(deps.packagesDir);
-      const mcpServer = deps.server;
-      const hotRegistered =
-        mcpServer && canHotRegister(manifest)
-          ? hotRegisterPackage(mcpServer, deps, name)
-          : false;
+      if (deps.server) {
+        reconcilePackageTools(deps.server, deps);
+      }
+      const hotRegistered = canHotRegister(manifest);
+      const saveResponse: Record<string, unknown> = {
+        duplicates: duplicates.map((hit) => ({
+          id: hit.id,
+          name: hit.name,
+        })),
+        hotRegistered,
+        name,
+        packageDir,
+        saved: true,
+        writes: manifest.capabilities.writes,
+      };
+      if (
+        !hotRegistered &&
+        manifest.capabilities.writes === 'review-required' &&
+        !manifest.autonomousOrigin
+      ) {
+        saveResponse.callableVia = 'fn_call with approveWrites: true';
+        saveResponse.hotRegisterReason =
+          'manual write packages require approveWrites and are not hot-registered';
+      }
       return {
         content: [
           {
-            text: JSON.stringify(
-              {
-                duplicates: duplicates.map((hit) => ({
-                  id: hit.id,
-                  name: hit.name,
-                })),
-                hotRegistered,
-                name,
-                packageDir,
-                saved: true,
-                writes: manifest.capabilities.writes,
-              },
-              null,
-              2
-            ),
+            text: JSON.stringify(saveResponse, null, 2),
             type: 'text' as const,
           },
         ],
@@ -486,10 +496,7 @@ export function registerGraphAndSandboxTools(
       });
       await deps.packageLibrary.reload(deps.packagesDir);
       if (deps.server) {
-        const pkg = deps.packageLibrary.get(installed.name);
-        if (pkg && canHotRegister(pkg.manifest)) {
-          hotRegisterPackage(deps.server, deps, installed.name);
-        }
+        reconcilePackageTools(deps.server, deps);
       }
       return {
         content: [

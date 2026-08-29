@@ -97,6 +97,20 @@ export interface RecordGatewayCallInput {
   truncated?: boolean;
 }
 
+export async function finalizeRunIfRequested(
+  recorder: TraceRecorder,
+  newRun?: boolean
+): Promise<void> {
+  if (!newRun) {
+    return;
+  }
+  try {
+    await recorder.finalizeCurrentRun();
+  } catch {
+    // Finalization is best-effort and must not mask tool responses.
+  }
+}
+
 export async function recordGatewayCallAndEnvelope(
   recorder: TraceRecorder,
   input: RecordGatewayCallInput,

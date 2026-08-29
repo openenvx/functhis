@@ -63,6 +63,3 @@ export async function runImportFromSources(options: {
     : importFromCursor(options.cwd ?? process.cwd());
   return writeImportResult(result, options);
 }
-
-/** @deprecated Use runImportFromSources */
-export const runImportCursor = runImportFromSources;

@@ -5,6 +5,7 @@ import { McpServer } from '@modelcontextprotocol/server';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 
 import { GraphService } from '../graph/service';
+import { createLearningWorker } from '../learning/worker';
 import { PackageLibrary } from '../packages/library';
 import { getPackagesDir } from '../packages/paths';
 import { findPackageRoot } from '../paths';
@@ -87,15 +88,33 @@ export async function startGateway(
   await manager.connectAll(config.upstreams);
   graph.indexMcp(manager.catalog.getAllTools());
 
-  const server = createGatewayServer({
+  const deps: GatewayDependencies = {
     abortSignal: abortController.signal,
     configDir,
     graph,
+    learningWorker: undefined,
     manager,
     packageLibrary,
     packagesDir: packagesRoot,
     recorder,
+  };
+  const server = createGatewayServer(deps);
+
+  const learningWorker = createLearningWorker({
+    configDir,
+    gatewayDeps: deps,
+    graph,
+    manager,
+    packageLibrary,
+    packagesDir: packagesRoot,
+    server,
   });
+  deps.learningWorker = learningWorker;
+
+  recorder.setOnRunFinalized(async (trace) => {
+    learningWorker.enqueue(trace);
+  });
+
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }

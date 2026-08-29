@@ -11,14 +11,14 @@ import {
   parseToolText,
   testUpstreamConfig,
   withGatewayClient,
-  withTempConfigDir,
+  withIntegrationConfigDir,
 } from './helpers';
 
 const packageRoot = findPackageRoot(import.meta.url);
 
 describe('integration', () => {
   test('indexes the repo and returns a compact subgraph', async () => {
-    await withTempConfigDir(async (configDir) => {
+    await withIntegrationConfigDir(async (configDir) => {
       const { report } = await runIndex({
         dir: configDir,
         include: ['src/catalog'],
@@ -61,7 +61,7 @@ describe('integration', () => {
   }, 60_000);
 
   test('executes sandbox code through the gateway', async () => {
-    await withTempConfigDir(async (configDir) => {
+    await withIntegrationConfigDir(async (configDir) => {
       const configPath = join(configDir, 'upstreams.json');
       await saveConfig(configPath, testUpstreamConfig());
 
@@ -90,7 +90,7 @@ export default async function(ctx, input) {
   }, 30_000);
 
   test('saves and runs a function package through the gateway', async () => {
-    await withTempConfigDir(async (configDir) => {
+    await withIntegrationConfigDir(async (configDir) => {
       const configPath = join(configDir, 'upstreams.json');
       await saveConfig(configPath, testUpstreamConfig());
       const packagesDir = await mkdtemp(join(tmpdir(), 'functhis-int-pkg-'));
@@ -173,7 +173,7 @@ export default async function(ctx, input) {
   }, 60_000);
 
   test('exposes graph and sandbox MCP tools', async () => {
-    await withTempConfigDir(async (configDir) => {
+    await withIntegrationConfigDir(async (configDir) => {
       const configPath = join(configDir, 'upstreams.json');
       await saveConfig(configPath, testUpstreamConfig());
 
@@ -190,7 +190,11 @@ export default async function(ctx, input) {
           'fn_inspect_function',
           'fn_compile_trace',
           'fn_candidates',
+          'fn_compile_group',
           'fn_test_function',
+          'fn_learning_status',
+          'fn_learning_pause',
+          'fn_learning_resume',
         ]) {
           expect(names).toContain(tool);
         }
@@ -199,7 +203,7 @@ export default async function(ctx, input) {
   }, 30_000);
 
   test('compiles a trace into a tested and saved function package', async () => {
-    await withTempConfigDir(async (configDir) => {
+    await withIntegrationConfigDir(async (configDir) => {
       const configPath = join(configDir, 'upstreams.json');
       await saveConfig(configPath, testUpstreamConfig());
       const packagesDir = await mkdtemp(join(tmpdir(), 'functhis-compile-'));
@@ -298,4 +302,92 @@ export default async function(ctx, input) {
       }
     });
   }, 90_000);
+
+  test('denies write-capable package without approveWrites and runs with approval', async () => {
+    await withIntegrationConfigDir(async (configDir) => {
+      const configPath = join(configDir, 'upstreams.json');
+      await saveConfig(configPath, testUpstreamConfig());
+      const packagesDir = await mkdtemp(join(tmpdir(), 'functhis-write-pkg-'));
+
+      try {
+        const source = `
+export default async function(ctx, input) {
+  return await ctx.tools.readonly.delete_user(input);
+}
+`;
+
+        await withGatewayClient(
+          { configPath, cwd: packageRoot, packagesDir },
+          async (client) => {
+            const saveResult = await client.callTool({
+              arguments: {
+                allowedTools: ['readonly.delete_user'],
+                approveWrites: true,
+                description: 'Delete a user',
+                name: 'delete-user',
+                source,
+              },
+              name: 'fn_save_function',
+            });
+            const saved = parseToolText(saveResult) as {
+              hotRegistered: boolean;
+              hotRegisterReason?: string;
+              saved: boolean;
+            };
+            expect(saved.saved).toBe(true);
+            expect(saved.hotRegistered).toBe(false);
+            expect(saved.hotRegisterReason).toContain('manual write packages');
+
+            const denied = await client.callTool({
+              arguments: {
+                arguments: { userId: 'u1' },
+                full: true,
+                id: 'delete-user',
+                newRun: true,
+              },
+              name: 'fn_call',
+            });
+            const deniedBody = parseToolText(denied) as { error?: string };
+            expect(deniedBody.error).toContain('approveWrites');
+
+            const approved = await client.callTool({
+              arguments: {
+                approveWrites: true,
+                arguments: { userId: 'u1' },
+                full: true,
+                id: 'delete-user',
+                newRun: true,
+              },
+              name: 'fn_call',
+            });
+            const approvedBody = parseToolText(approved) as {
+              result?: { deleted: string };
+            };
+            expect(approvedBody.result?.deleted).toBe('u1');
+          }
+        );
+      } finally {
+        await rm(packagesDir, { force: true, recursive: true });
+      }
+    });
+  }, 60_000);
+
+  test('fn_execute_code is always sandboxed and has no execution mode', async () => {
+    await withIntegrationConfigDir(async (configDir) => {
+      const configPath = join(configDir, 'upstreams.json');
+      await saveConfig(configPath, testUpstreamConfig());
+
+      await withGatewayClient({ configPath }, async (client) => {
+        const listed = await client.listTools();
+        const executeTool = listed.tools.find(
+          (tool) => tool.name === 'fn_execute_code'
+        );
+        expect(executeTool).toBeDefined();
+        const schema = executeTool?.inputSchema as {
+          properties?: Record<string, unknown>;
+        };
+        expect(schema?.properties?.execution).toBeUndefined();
+      });
+    });
+  }, 30_000);
 });

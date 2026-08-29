@@ -8,6 +8,10 @@ export const packageCapabilitiesSchema = z.object({
 });
 
 export const packageRuntimeSchema = z.object({
+  execution: z
+    .enum(['sandbox'])
+    .default('sandbox')
+    .describe('Isolated child process.'),
   maxCalls: z.number().int().positive().default(20),
   maxOutputBytes: z
     .number()
@@ -18,13 +22,24 @@ export const packageRuntimeSchema = z.object({
 });
 
 export const packageManifestSchema = z.object({
+  autonomousOrigin: z
+    .boolean()
+    .optional()
+    .describe(
+      'True when promoted by autonomous learning; write approval is policy-based.'
+    ),
   capabilities: packageCapabilitiesSchema,
   compiledFrom: z.string().optional(),
   description: z.string(),
   entrypoint: z.string().default('function.ts'),
   inputSchema: z.record(z.string(), z.unknown()),
+  lifecycle: z
+    .enum(['active', 'quarantined', 'rejected', 'staging'])
+    .default('active')
+    .optional(),
   name: z.string().regex(PACKAGE_NAME_PATTERN),
   outputSchema: z.record(z.string(), z.unknown()).optional(),
+  quarantineReason: z.string().optional(),
   runtime: packageRuntimeSchema,
 });
 

@@ -21,9 +21,9 @@ describe('skill descriptions', () => {
     const description = readSkillDescription(
       join(packageRoot, 'skills', 'functhis', 'SKILL.md')
     );
-    expect(description.toLowerCase()).toContain('record');
+    expect(description.toLowerCase()).toContain('autonomous');
     expect(description.toLowerCase()).toContain('fn_search');
-    expect(description.toLowerCase()).toContain('fn_save_function');
+    expect(description.toLowerCase()).toContain('auto-learned');
     expect(description.toLowerCase()).toContain('auto-bootstrap');
   });
 

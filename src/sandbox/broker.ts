@@ -5,6 +5,13 @@ import { assertToolAllowed, classifyToolRisk } from '../policy/access';
 import { redactValue } from '../redaction/redact';
 import type { TraceRecorder } from '../trace/recorder';
 import type { UpstreamManager } from '../upstream/manager';
+import {
+  SYSTEM_CAPABILITY_IDS,
+  systemExec,
+  systemReadFile,
+  systemWriteFile,
+} from './system-capabilities';
+import type { SystemCapabilityOptions } from './system-capabilities';
 
 export interface BrokerOptions {
   allowedTools: string[];
@@ -19,6 +26,7 @@ export interface BrokerOptions {
   recorder?: TraceRecorder;
   replay?: (toolId: string, args: unknown) => unknown | Promise<unknown>;
   signal?: AbortSignal;
+  systemCapabilities?: SystemCapabilityOptions;
 }
 
 export class CapabilityBroker {
@@ -42,6 +50,14 @@ export class CapabilityBroker {
     this.callCount += 1;
     if (this.callCount > maxCalls) {
       throw new Error(`Exceeded maximum tool calls (${maxCalls})`);
+    }
+
+    if (
+      SYSTEM_CAPABILITY_IDS.includes(
+        toolId as (typeof SYSTEM_CAPABILITY_IDS)[number]
+      )
+    ) {
+      return this.callSystemCapability(toolId, args);
     }
 
     const tool = this.manager.catalog.getTool(toolId);
@@ -145,5 +161,75 @@ export class CapabilityBroker {
 
   getCallCount(): number {
     return this.callCount;
+  }
+
+  private async callSystemCapability(
+    toolId: string,
+    args: unknown
+  ): Promise<unknown> {
+    const systemOptions = this.options.systemCapabilities ?? {};
+    const startedAt = new Date().toISOString();
+    const startMs = Date.now();
+    const sideEffect =
+      toolId === 'system.write_file' ? ('write' as const) : ('read' as const);
+
+    try {
+      let result: unknown;
+      if (toolId === 'system.read_file') {
+        result = await systemReadFile(systemOptions, args as { path: string });
+      } else if (toolId === 'system.write_file') {
+        if (!this.options.approveWrites) {
+          throw new Error('Write system capability requires approveWrites');
+        }
+        result = await systemWriteFile(
+          systemOptions,
+          args as { content: string; path: string }
+        );
+      } else if (toolId === 'system.exec') {
+        result = await systemExec(systemOptions, args as { command: string });
+      } else {
+        throw new Error(`Unknown system capability: ${toolId}`);
+      }
+
+      const durationMs = Date.now() - startMs;
+      const redacted = redactValue(result);
+      if (this.options.recorder) {
+        await this.options.recorder.recordCall({
+          arguments:
+            typeof args === 'object' && args !== null && !Array.isArray(args)
+              ? (args as Record<string, unknown>)
+              : { value: args },
+          durationMs,
+          endedAt: new Date().toISOString(),
+          output: redacted,
+          sideEffect,
+          startedAt,
+          status: 'succeeded',
+          toolFingerprint: toolId,
+          toolId,
+        });
+      }
+      return redacted;
+    } catch (error) {
+      const durationMs = Date.now() - startMs;
+      const message = error instanceof Error ? error.message : String(error);
+      if (this.options.recorder) {
+        await this.options.recorder.recordCall({
+          arguments:
+            typeof args === 'object' && args !== null && !Array.isArray(args)
+              ? (args as Record<string, unknown>)
+              : { value: args },
+          durationMs,
+          endedAt: new Date().toISOString(),
+          error: message,
+          sideEffect,
+          startedAt,
+          status: 'failed',
+          toolFingerprint: toolId,
+          toolId,
+        });
+      }
+      throw error;
+    }
   }
 }

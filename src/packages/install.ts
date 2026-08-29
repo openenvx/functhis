@@ -1,10 +1,15 @@
-import { cp, mkdir, readFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 
 import { schemaHash } from '../catalog/fingerprint';
 import type { UpstreamManager } from '../upstream/manager';
 import { loadPackage } from './save';
 import type { LockDriftIssue, LockInspection } from './schema';
+import {
+  promoteStagedPackage,
+  quarantineStagedPackage,
+  stagePackage,
+} from './stage';
 
 export function inspectLockDrift(
   manager: UpstreamManager,
@@ -37,14 +42,27 @@ export function inspectLockDrift(
   return { issues, ok: issues.length === 0 };
 }
 
+async function readReplayFixture(
+  packageDir: string
+): Promise<Record<string, unknown> | undefined> {
+  try {
+    const raw = await readFile(
+      join(packageDir, 'tests', 'replay.fixture.json'),
+      'utf-8'
+    );
+    return JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function installPackageFromPath(
   sourcePath: string,
   packagesRoot: string,
   options: { approve?: boolean } = {}
-): Promise<{ name: string; targetDir: string }> {
+): Promise<{ lifecycle: string; name: string; targetDir: string }> {
   const resolved = resolve(sourcePath);
-  const { manifest } = await loadPackage(resolved);
-  const targetDir = join(packagesRoot, manifest.name);
+  const { lock, manifest, source } = await loadPackage(resolved);
 
   if (!options.approve) {
     throw new Error(
@@ -52,10 +70,45 @@ export async function installPackageFromPath(
     );
   }
 
-  await mkdir(packagesRoot, { recursive: true });
-  await cp(resolved, targetDir, { recursive: true });
+  if (
+    manifest.capabilities.writes === 'review-required' &&
+    !manifest.autonomousOrigin
+  ) {
+    throw new Error(
+      `Installation of write-capable package "${manifest.name}" requires reviewing capabilities. Re-run with approve=true after review.`
+    );
+  }
 
-  return { name: manifest.name, targetDir };
+  const replayFixture = await readReplayFixture(resolved);
+  const stageDir = await stagePackage(packagesRoot, {
+    functionSource: source,
+    lock,
+    manifest: {
+      ...manifest,
+      lifecycle: 'active',
+    },
+    replayFixture,
+  });
+
+  try {
+    const targetDir = await promoteStagedPackage(
+      packagesRoot,
+      stageDir,
+      'active'
+    );
+    return {
+      lifecycle: 'active',
+      name: manifest.name,
+      targetDir,
+    };
+  } catch (error) {
+    await quarantineStagedPackage(
+      packagesRoot,
+      stageDir,
+      error instanceof Error ? error.message : String(error)
+    );
+    throw error;
+  }
 }
 
 export async function formatInspectReport(
@@ -69,6 +122,8 @@ export async function formatInspectReport(
     `Description: ${manifest.description}`,
     `Tools: ${manifest.capabilities.tools.join(', ')}`,
     `Writes: ${manifest.capabilities.writes}`,
+    `Lifecycle: ${manifest.lifecycle ?? 'active'}`,
+    `Autonomous origin: ${manifest.autonomousOrigin ? 'yes' : 'no'}`,
     '',
     drift.ok ? 'Lock status: OK' : 'Lock status: DRIFT DETECTED',
   ];

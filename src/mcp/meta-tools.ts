@@ -1,11 +1,20 @@
 import type { McpServer } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 
+import {
+  pauseLearning,
+  resumeLearning,
+  loadLearningControl,
+} from '../learning/control';
+import { loadLearningState } from '../learning/state';
 import { resolvePackageDir } from '../packages/install';
+import { countPackagesOnDisk } from '../packages/library';
 import { isPackageToolId } from '../packages/paths';
 import { assertToolAllowed } from '../policy/access';
-import { detectCandidates } from '../trace/candidates';
+import { loadSettings } from '../storage/settings';
+import { compileCandidateGroup, detectCandidates } from '../trace/candidates';
 import { compileTrace } from '../trace/compile';
+import { listTraceEvents } from '../trace/event-log';
 import { formatInspectReport, formatTraceListReport } from '../trace/inspect';
 import { prepareCallOutput } from '../trace/recorder';
 import { computeGatewayStats } from '../trace/stats';
@@ -13,6 +22,7 @@ import { resolveMcpClientLabel } from './client-info';
 import {
   buildCallResponse,
   buildGatewayErrorResponse,
+  finalizeRunIfRequested,
   recordGatewayCallAndEnvelope,
   respondWithStoredEvidence,
 } from './invoke';
@@ -59,6 +69,7 @@ export function registerMetaTools(
               .searchTools(query, remainingAfterGraph)
               .map((hit) => ({ ...hit, kind: 'tool' as const }))
           : [];
+      const totalPackagesOnDisk = await countPackagesOnDisk(deps.packagesDir);
 
       return {
         content: [
@@ -68,6 +79,7 @@ export function registerMetaTools(
                 hits: [...packageHits, ...graphToolHits, ...catalogHits],
                 totalCatalog: deps.manager.catalog.size(),
                 totalPackages: deps.packageLibrary.size(),
+                totalPackagesOnDisk,
               },
               null,
               2
@@ -141,6 +153,12 @@ export function registerMetaTools(
       description:
         'Invoke a saved package by name or an upstream MCP tool by namespaced id. Returns a compact pointer envelope for large results; use fn_recall with select to read fields.',
       inputSchema: z.object({
+        approveWrites: z
+          .boolean()
+          .optional()
+          .describe(
+            'Required when invoking a review-required (write-capable) saved package'
+          ),
         arguments: z
           .record(z.string(), z.unknown())
           .optional()
@@ -174,6 +192,7 @@ export function registerMetaTools(
     async ({
       id,
       arguments: toolArgs,
+      approveWrites,
       runId,
       newRun,
       full,
@@ -182,120 +201,127 @@ export function registerMetaTools(
     }) => {
       const rawArgs = (toolArgs ?? {}) as Record<string, unknown>;
 
-      if (isPackageToolId(id)) {
-        const packageDir = await resolvePackageDir(deps.packagesDir, id);
-        if (packageDir) {
-          return invokePackageFunction(packageDir, rawArgs, deps, {
-            full,
-            newRun,
-            runId,
+      try {
+        if (isPackageToolId(id)) {
+          const packageDir = await resolvePackageDir(deps.packagesDir, id);
+          if (packageDir) {
+            return await invokePackageFunction(packageDir, rawArgs, deps, {
+              approveWrites,
+              full,
+              newRun,
+              runId,
+            });
+          }
+          return buildCallResponse({
+            error: `Unknown package "${id}". Use fn_search to find saved packages.`,
           });
         }
-        return buildCallResponse({
-          error: `Unknown package "${id}". Use fn_search to find saved packages.`,
-        });
-      }
 
-      try {
-        await deps.recorder.ensureRun({
-          client: resolveMcpClientLabel(deps.server),
-          newRun,
-          runId,
-          sessionId,
-          skillId,
-        });
-        deps.recorder.assertRunActive();
-      } catch (error) {
-        return buildGatewayErrorResponse(
-          error instanceof Error ? error.message : String(error)
-        );
-      }
+        try {
+          await deps.recorder.ensureRun({
+            client: resolveMcpClientLabel(deps.server),
+            newRun,
+            runId,
+            sessionId,
+            skillId,
+          });
+          deps.recorder.assertRunActive();
+        } catch (error) {
+          return buildGatewayErrorResponse(
+            error instanceof Error ? error.message : String(error)
+          );
+        }
 
-      const { arguments: resolvedArgs, refs } =
-        deps.recorder.resolveArguments(rawArgs);
+        const { arguments: resolvedArgs, refs } =
+          deps.recorder.resolveArguments(rawArgs);
 
-      const tool = deps.manager.catalog.getTool(id);
-      const startedAt = new Date().toISOString();
-      const startMs = Date.now();
+        const tool = deps.manager.catalog.getTool(id);
+        const startedAt = new Date().toISOString();
+        const startMs = Date.now();
 
-      if (!tool) {
-        return recordGatewayCallAndEnvelope(
-          deps.recorder,
-          {
-            arguments: rawArgs,
-            durationMs: Date.now() - startMs,
-            endedAt: new Date().toISOString(),
-            error: `Unknown tool id: ${id}. Use fn_search and fn_describe first.`,
-            refs,
-            startedAt,
-            status: 'denied',
-            toolFingerprint: 'unknown',
-            toolId: id,
-          },
-          { full }
-        );
-      }
+        if (!tool) {
+          return await recordGatewayCallAndEnvelope(
+            deps.recorder,
+            {
+              arguments: rawArgs,
+              durationMs: Date.now() - startMs,
+              endedAt: new Date().toISOString(),
+              error: `Unknown tool id: ${id}. Use fn_search and fn_describe first.`,
+              refs,
+              startedAt,
+              status: 'denied',
+              toolFingerprint: 'unknown',
+              toolId: id,
+            },
+            { full }
+          );
+        }
 
-      try {
-        assertToolAllowed(tool);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return recordGatewayCallAndEnvelope(
-          deps.recorder,
-          {
-            arguments: rawArgs,
-            durationMs: Date.now() - startMs,
-            endedAt: new Date().toISOString(),
-            error: message,
-            refs,
-            startedAt,
-            status: 'denied',
-            toolFingerprint: tool.fingerprint,
-            toolId: tool.id,
-          },
-          { full }
-        );
-      }
+        try {
+          assertToolAllowed(tool);
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          return await recordGatewayCallAndEnvelope(
+            deps.recorder,
+            {
+              arguments: rawArgs,
+              durationMs: Date.now() - startMs,
+              endedAt: new Date().toISOString(),
+              error: message,
+              refs,
+              startedAt,
+              status: 'denied',
+              toolFingerprint: tool.fingerprint,
+              toolId: tool.id,
+            },
+            { full }
+          );
+        }
 
-      try {
-        const result = await deps.manager.callTool(id, resolvedArgs);
-        const prepared = prepareCallOutput(result);
-        return recordGatewayCallAndEnvelope(
-          deps.recorder,
-          {
-            arguments: rawArgs,
-            durationMs: Date.now() - startMs,
-            endedAt: new Date().toISOString(),
-            originalBytes: prepared.originalBytes,
-            output: prepared.output,
-            refs,
-            sideEffect: tool.risk,
-            startedAt,
-            status: 'succeeded',
-            toolFingerprint: tool.fingerprint,
-            toolId: tool.id,
-            truncated: prepared.truncated,
-          },
-          { full }
-        );
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        const status = message.includes('timed out') ? 'timeout' : 'failed';
-        return recordGatewayCallAndEnvelope(
-          deps.recorder,
-          {
-            arguments: rawArgs,
-            durationMs: Date.now() - startMs,
-            endedAt: new Date().toISOString(),
-            error: message,
-            refs,
-            startedAt,
-            status,
-            toolFingerprint: tool.fingerprint,
-            toolId: tool.id,
-          },
-          { full }
-        );
+        try {
+          const result = await deps.manager.callTool(id, resolvedArgs);
+          const prepared = prepareCallOutput(result);
+          return await recordGatewayCallAndEnvelope(
+            deps.recorder,
+            {
+              arguments: rawArgs,
+              durationMs: Date.now() - startMs,
+              endedAt: new Date().toISOString(),
+              originalBytes: prepared.originalBytes,
+              output: prepared.output,
+              refs,
+              sideEffect: tool.risk,
+              startedAt,
+              status: 'succeeded',
+              toolFingerprint: tool.fingerprint,
+              toolId: tool.id,
+              truncated: prepared.truncated,
+            },
+            { full }
+          );
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          const status = message.includes('timed out') ? 'timeout' : 'failed';
+          return await recordGatewayCallAndEnvelope(
+            deps.recorder,
+            {
+              arguments: rawArgs,
+              durationMs: Date.now() - startMs,
+              endedAt: new Date().toISOString(),
+              error: message,
+              refs,
+              startedAt,
+              status,
+              toolFingerprint: tool.fingerprint,
+              toolId: tool.id,
+            },
+            { full }
+          );
+        }
+      } finally {
+        await finalizeRunIfRequested(deps.recorder, newRun);
       }
     }
   );
@@ -451,7 +477,7 @@ export function registerMetaTools(
     'fn_compile_trace',
     {
       description:
-        'Compile a successful gateway trace into a compile brief and TypeScript skeleton for a reusable function package.',
+        'Compile a successful gateway trace into a compile brief and TypeScript skeleton. Read-only repeated flows are also auto-crystallized by the gateway.',
       inputSchema: z.object({
         description: z.string().optional(),
         name: z.string().describe('Package name (lowercase, hyphens allowed)'),
@@ -464,7 +490,10 @@ export function registerMetaTools(
           description,
           name,
         });
-        return buildCallResponse(brief);
+        return buildCallResponse({
+          ...brief,
+          autonomousLearning: true,
+        });
       } catch (error) {
         return buildGatewayErrorResponse(
           error instanceof Error ? error.message : String(error)
@@ -477,7 +506,7 @@ export function registerMetaTools(
     'fn_candidates',
     {
       description:
-        'Detect repeated trace patterns that may be worth compiling into reusable function packages. Suggestions only — no automatic codegen.',
+        'Detect repeated trace patterns. Functhis autonomously compiles, verifies, and saves read-only packages when the same flow repeats.',
       inputSchema: z.object({
         limit: z
           .number()
@@ -501,8 +530,11 @@ export function registerMetaTools(
           limit,
           minOccurrences,
         });
+        const learningState = await loadLearningState(deps.configDir);
         return buildCallResponse({
+          autonomousLearning: true,
           candidates,
+          crystallized: learningState.crystallizedPackages,
           labels: { occurrenceCount: 'observed', signals: 'deterministic' },
           total: candidates.length,
         });
@@ -511,6 +543,119 @@ export function registerMetaTools(
           error instanceof Error ? error.message : String(error)
         );
       }
+    }
+  );
+
+  server.registerTool(
+    'fn_compile_group',
+    {
+      description:
+        'Compile compile briefs for a repeated trace candidate group returned by fn_candidates. Read-only groups are auto-crystallized by the gateway when they repeat.',
+      inputSchema: z.object({
+        candidateId: z
+          .string()
+          .describe('Candidate id from fn_candidates (cand-...)'),
+        description: z.string().optional(),
+        name: z.string().describe('Package name (lowercase, hyphens allowed)'),
+      }),
+    },
+    async ({ candidateId, name, description }) => {
+      try {
+        const result = await compileCandidateGroup(
+          deps.configDir,
+          candidateId,
+          {
+            description,
+            name,
+          }
+        );
+        return buildCallResponse({
+          ...result,
+          autonomousLearning: true,
+        });
+      } catch (error) {
+        return buildGatewayErrorResponse(
+          error instanceof Error ? error.message : String(error)
+        );
+      }
+    }
+  );
+
+  server.registerTool(
+    'fn_learning_status',
+    {
+      description:
+        'Observe autonomous learning: queue depth, pause state, recent jobs, crystallized packages, and policy settings.',
+      inputSchema: z.object({
+        eventLimit: z
+          .number()
+          .int()
+          .min(1)
+          .max(200)
+          .optional()
+          .describe('Recent trace events to include (default 20)'),
+      }),
+    },
+    async ({ eventLimit }) => {
+      const settings = await loadSettings(deps.configDir);
+      const control = await loadLearningControl(deps.configDir);
+      const learningState = await loadLearningState(deps.configDir);
+      const events = await listTraceEvents(deps.configDir, {
+        limit: eventLimit ?? 20,
+      });
+      return buildCallResponse({
+        control,
+        crystallized: learningState.crystallizedPackages,
+        jobs: learningState.jobs,
+        learning: settings.learning ?? { enabled: true },
+        observation: {
+          directMcpBypass:
+            'unobservable — upstream MCP called outside fn_call is not recorded',
+          scope: 'gateway-routed',
+          systemCapabilities: [
+            'system.read_file',
+            'system.write_file',
+            'system.exec',
+          ],
+        },
+        processing: deps.learningWorker?.isProcessing() ?? false,
+        queueDepth: deps.learningWorker?.getQueueDepth() ?? 0,
+        recentEvents: events,
+      });
+    }
+  );
+
+  server.registerTool(
+    'fn_learning_pause',
+    {
+      description:
+        'Emergency pause for autonomous learning. Normal operation does not require pausing.',
+      inputSchema: z.object({}),
+    },
+    async () => {
+      const control = await pauseLearning(deps.configDir);
+      await deps.learningWorker?.pause();
+      return buildCallResponse({
+        message: 'Autonomous learning paused',
+        paused: control.paused,
+        pausedAt: control.pausedAt,
+      });
+    }
+  );
+
+  server.registerTool(
+    'fn_learning_resume',
+    {
+      description: 'Resume autonomous learning after an emergency pause.',
+      inputSchema: z.object({}),
+    },
+    async () => {
+      const control = await resumeLearning(deps.configDir);
+      await deps.learningWorker?.resume();
+      return buildCallResponse({
+        message: 'Autonomous learning resumed',
+        paused: control.paused,
+      });
     }
   );
 }

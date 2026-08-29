@@ -59,6 +59,7 @@ const META_TOOL_IDS = new Set([
   'fn_inspect',
   'fn_compile_trace',
   'fn_candidates',
+  'fn_compile_group',
   'fn_test_function',
   'fn_save_function',
   'fn_install_function',

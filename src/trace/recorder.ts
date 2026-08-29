@@ -9,10 +9,12 @@ import {
 import { classifyToolRisk } from '../policy/access';
 import { redactValue } from '../redaction/redact';
 import type { ToolRisk } from '../upstream/types';
+import { appendTraceEvent } from './event-log';
 import { resolveEvidenceRefs } from './refs';
-import { generateRunId, makeAddress, REDACTION_VERSION } from './schema';
+import { RunManager } from './run-manager';
+import { makeAddress } from './schema';
 import type { ExecutionTrace, TraceCall, TraceCallStatus } from './schema';
-import { loadTrace, saveTrace } from './store';
+import { loadTrace } from './store';
 
 export const WHOLE_RUN_DEADLINE_MS = 15 * 60 * 1000;
 
@@ -44,15 +46,22 @@ export interface EnsureRunOptions {
 }
 
 export class TraceRecorder {
-  private currentTrace: ExecutionTrace | null = null;
   private cancelled = false;
   private graph?: GraphService;
+  private onRunFinalized?: (trace: ExecutionTrace) => Promise<void>;
+  private readonly runManager: RunManager;
+  private currentSessionId?: string;
 
   constructor(
     private readonly configDir: string,
     options: { graph?: GraphService } = {}
   ) {
     this.graph = options.graph;
+    this.runManager = new RunManager(configDir, options.graph);
+  }
+
+  setOnRunFinalized(handler: (trace: ExecutionTrace) => Promise<void>): void {
+    this.onRunFinalized = handler;
   }
 
   setGraph(graph: GraphService): void {
@@ -64,86 +73,58 @@ export class TraceRecorder {
   }
 
   async cancelCurrentRun(): Promise<void> {
-    if (!this.currentTrace || this.currentTrace.status !== 'running') {
+    const trace = this.getCurrentTrace();
+    if (!trace || trace.status !== 'running') {
       return;
     }
     this.cancelled = true;
-    this.currentTrace.status = 'cancelled';
-    this.currentTrace.endedAt = new Date().toISOString();
-    await this.persist(this.currentTrace);
-    this.currentTrace = null;
+    trace.status = 'cancelled';
+    trace.endedAt = new Date().toISOString();
+    await this.runManager.persistTrace(trace);
+    this.runManager.clearTrace(this.currentSessionId);
   }
 
   getCurrentRunId(): string | undefined {
-    return this.currentTrace?.id;
+    return this.getCurrentTrace()?.id;
   }
 
   async ensureRun(options?: EnsureRunOptions): Promise<ExecutionTrace> {
-    if (options?.newRun) {
-      await this.finalizeCurrentRun();
-      this.currentTrace = this.createRun(options);
-      await this.persist(this.currentTrace);
-      return this.currentTrace;
+    this.currentSessionId = options?.sessionId;
+    const trace = await this.runManager.ensureRun(options);
+    if (this.applyRunMetadata(trace, options)) {
+      await this.runManager.persistTrace(trace);
     }
-
-    if (options?.runId) {
-      if (this.currentTrace?.id === options.runId) {
-        this.assertRunNotExpired(this.currentTrace);
-        this.applyRunMetadata(this.currentTrace, options);
-        return this.currentTrace;
-      }
-      const loaded = await loadTrace(this.configDir, options.runId);
-      if (loaded.status !== 'running') {
-        throw new Error(
-          `Run "${options.runId}" is ${loaded.status}. Pass newRun: true to start a fresh run.`
-        );
-      }
-      this.currentTrace = loaded;
-      if (this.applyRunMetadata(this.currentTrace, options)) {
-        await this.persist(this.currentTrace);
-      }
-      return loaded;
-    }
-
-    if (this.currentTrace) {
-      this.assertRunNotExpired(this.currentTrace);
-      if (this.applyRunMetadata(this.currentTrace, options)) {
-        await this.persist(this.currentTrace);
-      }
-      return this.currentTrace;
-    }
-
-    this.currentTrace = this.createRun(options);
-    await this.persist(this.currentTrace);
-    return this.currentTrace;
+    return trace;
   }
 
   assertRunActive(): void {
-    if (!this.currentTrace) {
+    const trace = this.getCurrentTrace();
+    if (!trace) {
       return;
     }
-    if (this.currentTrace.status === 'cancelled') {
+    if (trace.status === 'cancelled') {
       throw new Error(
         'Current run was cancelled. Pass newRun: true to continue.'
       );
     }
-    this.assertRunNotExpired(this.currentTrace);
+    this.assertRunNotExpired(trace);
   }
 
   resolveArguments(args: Record<string, unknown>): {
     arguments: Record<string, unknown>;
     refs: string[];
   } {
-    if (!this.currentTrace) {
+    const trace = this.getCurrentTrace();
+    if (!trace) {
       return { arguments: args, refs: [] };
     }
-    return resolveEvidenceRefs(args, this.currentTrace);
+    return resolveEvidenceRefs(args, trace);
   }
 
   async recordCall(
     input: RecordCallInput
   ): Promise<{ address: string; runId: string }> {
-    const trace = this.currentTrace;
+    const trace = this.getCurrentTrace();
     if (!trace) {
       throw new Error('No active run to record call');
     }
@@ -191,31 +172,31 @@ export class TraceRecorder {
     trace.status = hasFailure ? 'failed' : 'running';
     trace.endedAt = input.endedAt;
 
-    await this.persist(trace);
+    await this.runManager.persistTrace(trace);
+    await appendTraceEvent(this.configDir, {
+      attempt: 0,
+      capability: input.toolId.startsWith('system.')
+        ? input.toolId
+        : 'mcp.call',
+      endedAt: input.endedAt,
+      error: input.error,
+      operationKey: `${input.toolId}:${input.toolFingerprint}`,
+      risk: input.sideEffect,
+      runId: trace.id,
+      sessionId: trace.sessionId,
+      startedAt: input.startedAt,
+      status: input.status,
+      toolId: input.toolId,
+    });
+
     return { address, runId: trace.id };
   }
 
   async finalizeCurrentRun(): Promise<void> {
-    const trace = this.currentTrace;
-    if (!trace || trace.calls.length === 0) {
-      this.currentTrace = null;
-      return;
+    const finalized = await this.runManager.finalizeRun(this.currentSessionId);
+    if (finalized?.status === 'succeeded' && this.onRunFinalized) {
+      await this.onRunFinalized(finalized);
     }
-
-    const allSucceeded = trace.calls.every(
-      (entry) => entry.status === 'succeeded'
-    );
-    const hasFailure = trace.calls.some(
-      (entry) => entry.status !== 'succeeded' && entry.status !== 'denied'
-    );
-    trace.status = hasFailure
-      ? 'failed'
-      : allSucceeded
-        ? 'succeeded'
-        : 'running';
-    trace.endedAt = new Date().toISOString();
-    await this.persist(trace);
-    this.currentTrace = null;
   }
 
   async recall(runId: string, address: string): Promise<unknown> {
@@ -234,7 +215,7 @@ export class TraceRecorder {
     returnedBytes: number;
     storedBytes: number;
   }): Promise<void> {
-    const trace = this.currentTrace;
+    const trace = this.getCurrentTrace();
     if (!trace || trace.calls.length === 0) {
       return;
     }
@@ -248,22 +229,11 @@ export class TraceRecorder {
     lastCall.estimatedOutputTokens = estimateTokensFromBytes(
       metrics.storedBytes
     );
-    await this.persist(trace);
+    await this.runManager.persistTrace(trace);
   }
 
-  private createRun(options?: EnsureRunOptions): ExecutionTrace {
-    return {
-      calls: [],
-      client: options?.client,
-      cwd: options?.cwd ?? process.cwd(),
-      id: generateRunId(),
-      redactionVersion: REDACTION_VERSION,
-      sessionId: options?.sessionId,
-      skillId: options?.skillId,
-      startedAt: new Date().toISOString(),
-      status: 'running',
-      toolFingerprints: {},
-    };
+  private getCurrentTrace(): ExecutionTrace | undefined {
+    return this.runManager.getTrace(this.currentSessionId);
   }
 
   private applyRunMetadata(
@@ -294,17 +264,12 @@ export class TraceRecorder {
     if (Date.now() - started > WHOLE_RUN_DEADLINE_MS) {
       trace.status = 'failed';
       trace.endedAt = new Date().toISOString();
-      void this.persist(trace);
-      this.currentTrace = null;
+      void this.runManager.persistTrace(trace);
+      this.runManager.clearTrace(this.currentSessionId);
       throw new Error(
         `Run "${trace.id}" exceeded the ${WHOLE_RUN_DEADLINE_MS / 60_000} minute deadline. Pass newRun: true to start a fresh run.`
       );
     }
-  }
-
-  private async persist(trace: ExecutionTrace): Promise<void> {
-    await saveTrace(this.configDir, trace);
-    this.graph?.indexRun(trace);
   }
 }
 

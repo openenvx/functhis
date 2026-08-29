@@ -5,6 +5,7 @@ import { ToolCatalog } from '../catalog/index';
 import { parseToolId } from '../catalog/namespace';
 import type { McpCallResult } from '../mcp/types';
 import type { UpstreamServer } from '../storage/config';
+import { withReadRetries } from './retry';
 
 const CONNECT_TIMEOUT_MS = 30_000;
 export const CALL_TIMEOUT_MS = 60_000;
@@ -130,7 +131,8 @@ export class UpstreamManager {
       });
     }
 
-    try {
+    const risk = tool.risk ?? 'unknown';
+    const call = async (): Promise<McpCallResult> => {
       const result = await client.callTool(
         {
           arguments: args as Record<string, unknown>,
@@ -139,6 +141,14 @@ export class UpstreamManager {
         { signal: controller.signal }
       );
       return result as McpCallResult;
+    };
+
+    try {
+      const result =
+        risk === 'read'
+          ? await withReadRetries(call, { maxAttempts: 3 })
+          : await call();
+      return result;
     } catch (error) {
       if (controller.signal.aborted) {
         throw new Error(`Tool call timed out after ${timeoutMs}ms`, {

@@ -30,6 +30,21 @@ export function fixtureServerPath(
   return join(packageRoot, 'fixtures', 'servers', `${name}.ts`);
 }
 
+export function sandboxChildWorkerPath(fromModuleUrl: string): string {
+  const packageRoot = findPackageRoot(fromModuleUrl);
+  const built = join(packageRoot, 'dist', 'src', 'sandbox', 'child-worker.js');
+  if (existsSync(built)) {
+    return built;
+  }
+  const source = join(packageRoot, 'src', 'sandbox', 'child-worker.ts');
+  if (existsSync(source)) {
+    return source;
+  }
+  throw new Error(
+    'Sandbox child worker not found. Run "bun run build" or keep src/sandbox/child-worker.ts.'
+  );
+}
+
 export function invocationForScript(scriptPath: string): {
   args: string[];
   command: string;

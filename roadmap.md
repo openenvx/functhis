@@ -5,12 +5,10 @@ Local OSS only — no Cloud, accounts, or hosted runner.
 ## Product loop
 
 ```text
-observe → inspect → compile → verify → save → reuse → measure
+observe → detect → compile → verify → policy → stage → promote → reuse → measure
 ```
 
-**The local product loop is complete.** Observe through measure works end to end with graph-backed discovery, detect, verify, and labeled stats.
-
-Functhis only observes MCP calls routed through its gateway — not shell, native file tools, or MCP servers the client calls directly.
+**Functhis is fully autonomous by default.** The gateway records work, detects repeated flows, evaluates policy, and crystallizes packages without user prompts. Outcomes are `promoted` or `quarantined`. Agents should prefer learned packages from `fn_search`.
 
 ---
 
@@ -18,22 +16,28 @@ Functhis only observes MCP calls routed through its gateway — not shell, nativ
 
 | Capability | Surface |
 | --- | --- |
-| Trace recording | Automatic on `fn_call`, sandbox, and package runs |
+| Autonomous learning | Async worker, state machine, `.functhis/learning.json`, `learning` settings |
+| Learning control | `fn_learning_status`, `fn_learning_pause`, `fn_learning_resume` |
+| Durable observation | Per-session `RunManager`, `.functhis/events.jsonl`, atomic trace writes |
+| Write policy | `learning.writePolicy`, `learning.allowedWriteTools`, auto-quarantine |
+| System capabilities | `system.read_file`, `system.write_file`, `system.exec` via broker |
+| Transactional packages | Staging dir, lifecycle in manifest, promote/quarantine |
+| Trace recording | Automatic on `fn_call`, sandbox, system, and package runs |
 | Inspect + dataflow | `fn_inspect`, `fn traces list\|inspect` |
 | Compile | `fn_compile_trace`, `fn traces compile` |
-| Detect | `fn_candidates`, `fn traces candidates\|compile-group` |
+| Detect | `fn_candidates`, `fn_compile_group`, `fn traces candidates\|compile-group` |
 | Verify | `fn_test_function`, replay / live, output schema enforcement |
-| Save + reuse | `fn_save_function` (dry-run / approveWrites), hot-register read-only packages |
+| Save + reuse | `fn_save_function` (manual override), hot-register active read-only packages |
 | Measure | `fn_stats` with live vs replay verification counts and labeled estimates |
 | Retention | `.functhis/settings.json` (default 200 runs / 30 days) |
 | Graph search | `fn_search_context` across code, tools, functions, and runs |
 | Graph queries | `toolId`, `query`+`toolId`, `requiredTools`, `schemaDrift` |
-| Write safety | `review-required` packages, no hot-register until approved |
+| Security | Sandbox-only package execution, transient read retries, no write retry without idempotency |
 
 **Package layout:**
 
 ```text
-packages/<name>/
+packages/auto-<flow>/
   function.ts
   functhis.json
   functhis.lock
@@ -47,7 +51,7 @@ Share by committing `packages/` or `fn_install_function --approve` from a path.
 
 ## Later / deferred
 
-- System-tool tracking (`system.read_file`, etc.)
+- Direct-MCP proxy for all clients (when intercept is possible)
 - Hosted package catalog (optional; local gateway does not depend on it)
 
 ---
