@@ -12,14 +12,16 @@ metadata:
 
 Alias for first-run bootstrap. **Probe live state; never assume prior sessions.** **Do not ask** the user to choose import sources or run CLI themselves.
 
-User install guide: [INSTALL.md](../../INSTALL.md)
+User install guide: [INSTALL.md](https://github.com/openenvx/functhis/blob/main/INSTALL.md)
 
 ## Auto-bootstrap sequence
 
 Run **one command at a time**, summarize each step briefly.
 
-1. `command -v fn` and `fn --version` — install with `npm install -g functhis` if missing
-2. `fn import` — all known client MCP configs (Cursor, Claude, OpenCode)
+1. `command -v fn` and `fn --version`
+   - If missing: `npm install -g functhis`
+   - If npm reports 404 / not found: `npm install -g github:openenvx/functhis`
+2. `fn import` — all known client MCP configs (Cursor, Claude, OpenCode). HTTP/SSE servers are skipped; mention that warning.
 3. If zero importable upstreams: `fn setup` (demo fixtures)
 4. Detect client and merge Functhis MCP config:
    - Cursor: `fn setup --write-client cursor --packages-dir ./packages`

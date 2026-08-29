@@ -85,4 +85,19 @@ describe('fn doctor', () => {
       expect(catalog?.toolCount).toBeGreaterThanOrEqual(100);
     });
   }, 60_000);
+
+  test('warns about HTTP/SSE servers in client configs', async () => {
+    await withTempConfigDir(async (dir) => {
+      const configPath = join(dir, 'upstreams.json');
+      await saveConfig(configPath, testUpstreamConfig());
+      const result = await runDoctor({
+        cwd: join(packageRoot, 'test', 'fixtures', 'remote-mcp'),
+        dir,
+      });
+      expect(result.ok).toBe(true);
+      expect(result.skippedRemote.some((item) => item.name === 'remote')).toBe(
+        true
+      );
+    });
+  }, 60_000);
 });

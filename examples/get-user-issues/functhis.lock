@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "tools": {
+    "readonly.get_user": {
+      "name": "get_user",
+      "server": "readonly",
+      "schemaHash": "exampleplaceholder"
+    },
+    "readonly.list_issues": {
+      "name": "list_issues",
+      "server": "readonly",
+      "schemaHash": "exampleplaceholder"
+    }
+  }
+}

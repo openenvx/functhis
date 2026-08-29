@@ -7,7 +7,7 @@ import type { UpstreamServer, UpstreamsConfig } from '../storage/config';
 
 const mcpStdioServerSchema = z.object({
   args: z.array(z.string()).optional(),
-  command: z.string().min(1),
+  command: z.string().min(1).optional(),
   cwd: z.string().optional(),
   env: z.record(z.string(), z.string()).optional(),
   headers: z.record(z.string(), z.string()).optional(),
@@ -391,6 +391,16 @@ export function mergeUpstreamsConfig(
   return { upstreams: [...byId.values()], version: 1 };
 }
 
+export function isUnsupportedRemoteSkip(reason: string): boolean {
+  return /HTTP\/SSE|Remote MCP servers are not supported/i.test(reason);
+}
+
+export function listUnsupportedRemoteSkips(
+  result: ClientImportResult
+): ClientImportResult['skipped'] {
+  return result.skipped.filter((item) => isUnsupportedRemoteSkip(item.reason));
+}
+
 export function formatImportReport(result: ClientImportResult): string {
   const lines: string[] = [];
   if (result.imported.length > 0) {
@@ -404,6 +414,13 @@ export function formatImportReport(result: ClientImportResult): string {
     for (const item of result.skipped) {
       lines.push(`  - ${item.name}: ${item.reason}`);
     }
+  }
+  const remoteSkipped = listUnsupportedRemoteSkips(result);
+  if (remoteSkipped.length > 0) {
+    lines.push(
+      '',
+      `Warning: skipped ${remoteSkipped.length} HTTP/SSE or remote MCP server(s). Functhis imports stdio only. Those servers stay in the client and are not observed by the gateway.`
+    );
   }
   lines.push('', `Total importable upstreams: ${result.upstreams.length}`);
   return lines.join('\n');

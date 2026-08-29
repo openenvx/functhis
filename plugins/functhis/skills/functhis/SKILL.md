@@ -10,17 +10,19 @@ metadata:
 
 # Functhis
 
-Functhis is a **fully autonomous** local MCP gateway. It records gateway work, detects repeated flows, evaluates policy, and **automatically** crystallizes them into reusable TypeScript packages. **Users only install this Skill** — you bootstrap Functhis for them. See [INSTALL.md](../../INSTALL.md).
+Functhis is a **fully autonomous** local MCP gateway. It records gateway work, detects repeated flows, evaluates policy, and **automatically** crystallizes them into reusable TypeScript packages. **Users only install this Skill** — you bootstrap Functhis for them. See [INSTALL.md](https://github.com/openenvx/functhis/blob/main/INSTALL.md).
 
 ## Auto-bootstrap (do not ask the user)
 
 Probe live state on every session where this Skill applies. **Never ask** which setup fork to use.
 
-1. `command -v fn` — if missing: `npm install -g functhis`
-2. `fn import` — scan Cursor, Claude Code, and OpenCode configs into `.functhis/upstreams.json`
+1. `command -v fn` and `fn --version`
+   - If missing: `npm install -g functhis`
+   - If npm reports 404 / not found: `npm install -g github:openenvx/functhis`
+2. `fn import` — scan Cursor, Claude Code, and OpenCode configs into `.functhis/upstreams.json` (stdio only; report HTTP/SSE skips to the user)
 3. If import reports zero upstreams: `fn setup`
 4. Detect client from project files (`.cursor/mcp.json`, `.mcp.json`, `opencode.json(c)`) and run: `fn setup --write-client <cursor|claude|opencode> --packages-dir ./packages`
-5. `fn doctor`
+5. `fn doctor` — if it warns about HTTP/SSE servers, tell the user those stay in the client and are not observed
 6. If `fn_search` is not in the current tool list, tell the user to restart the MCP client once, then continue. After restart, **do not mention CLI commands**.
 
 ## Default behavior (always on)

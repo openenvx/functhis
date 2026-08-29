@@ -47,6 +47,8 @@ export interface IndexReport {
   filesRemoved: number;
   symbolsAdded: number;
   durationMs: number;
+  /** Set when the repo cannot be indexed (no TypeScript tsconfig). */
+  skippedReason?: string;
 }
 
 export interface ContextSearchHit {

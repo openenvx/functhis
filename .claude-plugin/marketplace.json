@@ -10,7 +10,7 @@
     {
       "name": "functhis",
       "source": "./plugins/functhis",
-      "description": "Route MCP through one gateway, run sandbox TypeScript, and save reusable function packages.",
+      "description": "Route MCP through one gateway. Repeated flows become TypeScript packages automatically.",
       "homepage": "https://github.com/openenvx/functhis",
       "license": "Apache-2.0",
       "install": "npm install -g functhis"

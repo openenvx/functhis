@@ -1,6 +1,6 @@
 {
   "name": "functhis",
-  "description": "Functhis skills for MCP gateway, sandbox code, and function packages.",
+  "description": "Local MCP gateway that records tool use and auto-saves repeated flows as TypeScript packages.",
   "author": {
     "name": "OpenEnvX"
   },

@@ -1,6 +1,6 @@
 {
   "name": "functhis",
-  "description": "Functhis skills for MCP gateway, sandbox code, and function packages.",
+  "description": "Local MCP gateway that records tool use and auto-saves repeated flows as TypeScript packages.",
   "author": {
     "name": "OpenEnvX",
     "url": "https://github.com/openenvx/functhis"
@@ -12,7 +12,7 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Functhis",
-    "shortDescription": "Local MCP gateway and function package skills.",
+    "shortDescription": "Local MCP gateway; auto-learns repeated tool flows.",
     "developerName": "OpenEnvX",
     "category": "Productivity",
     "websiteURL": "https://github.com/openenvx/functhis"

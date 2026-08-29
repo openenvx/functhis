@@ -8,7 +8,12 @@ export default defineConfig({
     style: 'off',
   },
   extends: [core],
-  ignorePatterns: [...core.ignorePatterns, 'test/**', 'fixtures/**'],
+  ignorePatterns: [
+    ...core.ignorePatterns,
+    'test/**',
+    'fixtures/**',
+    'examples/**',
+  ],
   rules: {
     'class-methods-use-this': 'off',
     complexity: 'off',

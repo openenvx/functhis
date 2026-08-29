@@ -1,6 +1,10 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
+import {
+  importFromAllClients,
+  listUnsupportedRemoteSkips,
+} from '../import/clients';
 import { PackageLibrary } from '../packages/library';
 import { getPackagesDir } from '../packages/paths';
 import { findPackageRoot } from '../paths';
@@ -13,6 +17,12 @@ const packageJson = JSON.parse(
   readFileSync(join(findPackageRoot(import.meta.url), 'package.json'), 'utf-8')
 ) as { version: string };
 
+export interface DoctorSkippedRemote {
+  name: string;
+  reason: string;
+  source: string;
+}
+
 export interface DoctorResult {
   backups: number;
   configPath: string;
@@ -24,6 +34,7 @@ export interface DoctorResult {
     loaded: string[];
     total: number;
   };
+  skippedRemote: DoctorSkippedRemote[];
   upstreams: {
     id: string;
     label: string;
@@ -36,6 +47,7 @@ export interface DoctorResult {
 }
 
 export async function runDoctor(options: {
+  cwd?: string;
   dir?: string;
   packagesDir?: string;
 }): Promise<DoctorResult> {
@@ -74,6 +86,9 @@ export async function runDoctor(options: {
 
     const totalTools = manager.catalog.size();
     const ok = upstreams.every((u) => !u.enabled || u.toolCount !== undefined);
+    const skippedRemote = listUnsupportedRemoteSkips(
+      importFromAllClients(options.cwd ?? process.cwd())
+    );
 
     return {
       backups,
@@ -87,6 +102,7 @@ export async function runDoctor(options: {
         loaded: packageLibrary.getAll().map((pkg) => pkg.manifest.name),
         total: packageLibrary.size(),
       },
+      skippedRemote,
       totalTools,
       upstreams,
     };
@@ -111,6 +127,15 @@ export function formatDoctorReport(result: DoctorResult): string {
       );
     } else {
       lines.push(`- ${upstream.id} (${upstream.label}): disabled`);
+    }
+  }
+  if (result.skippedRemote.length > 0) {
+    lines.push(
+      '',
+      `Warning: ${result.skippedRemote.length} HTTP/SSE or remote MCP server(s) are not imported (stdio only):`
+    );
+    for (const item of result.skippedRemote) {
+      lines.push(`  ! ${item.name}: ${item.reason}`);
     }
   }
   lines.push(

@@ -1,7 +1,7 @@
 {
   "name": "functhis",
   "displayName": "Functhis",
-  "description": "Functhis skills: MCP gateway, automatic recording, save packages on request. See INSTALL.md.",
+  "description": "Local MCP gateway that records tool use and auto-saves repeated flows as TypeScript packages. See INSTALL.md.",
   "author": {
     "name": "OpenEnvX",
     "url": "https://github.com/openenvx/functhis"

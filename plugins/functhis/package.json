@@ -1,5 +1,5 @@
 {
   "name": "functhis-plugin",
-  "description": "Agent plugin packaging for Functhis skills.",
+  "description": "Agent plugin packaging for Functhis skills (autonomous MCP gateway).",
   "license": "Apache-2.0"
 }

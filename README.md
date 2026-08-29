@@ -2,7 +2,7 @@
 
 **Functhis turns expensive, multi-step MCP work into small, reusable TypeScript tools.**
 
-Functhis sits between your AI agent and your MCP servers. It indexes your codebase and tool catalog into a compact knowledge graph, runs agent-written TypeScript in a sandbox, and saves working logic as packages you can save and share.
+Functhis sits between your AI agent and your MCP servers. It indexes your TypeScript codebase and tool catalog into a compact knowledge graph, runs agent-written TypeScript in a sandbox, and saves working logic as packages you can commit and reuse.
 
 No account, cloud, or telemetry. Everything runs on your machine.
 
@@ -19,7 +19,7 @@ Functhis addresses all three in one local process:
 | Problem | Functhis answer |
 | --- | --- |
 | Bloated MCP surface | Single gateway with search, compact schemas, and pointer envelopes for large results |
-| Missing repo context | SQLite knowledge graph of symbols, imports, and MCP tools with FTS search |
+| Missing repo context | SQLite knowledge graph of **TypeScript** symbols, imports, and MCP tools with FTS search |
 | Throwaway workflows | Autonomous learning: repeated read-only flows become `packages/auto-*` without prompts |
 
 ## How it works
@@ -56,6 +56,14 @@ Manual tools (`fn_compile_trace`, `fn_save_function`) remain available for custo
 
 Install the **Agent Skill** and the agent handles bootstrap for you. See [INSTALL.md](INSTALL.md).
 
+## Compared to what?
+
+- **Raw MCP in the client** — Functhis shrinks the surface (search, compact envelopes, recording). Direct MCP still works; those calls are **not** observed or learned.
+- **Skill / prompt libraries** — Skills tell the agent how to work. Functhis saves working TypeScript that runs in a sandbox.
+- **n8n / visual builders** — No canvas, no hosted runner. Packages are git folders (`function.ts` + lockfile).
+
+HTTP/SSE MCP servers are **not** imported (stdio only). `fn import` and `fn doctor` warn when they skip remotes.
+
 ## Install
 
 **Recommended:** install only the Skill (or plugin). The agent installs `fn`, imports your MCP servers, wires the gateway, and runs `fn doctor`.
@@ -73,6 +81,8 @@ Full paths for Cursor, Claude, Codex, and OpenCode: **[INSTALL.md](INSTALL.md)**
 
 ```sh
 npm install -g functhis
+# if the registry package is not published yet:
+npm install -g github:openenvx/functhis
 fn setup
 fn index
 fn serve --packages-dir ./packages
@@ -84,11 +94,11 @@ Reference: [skills/functhis/references/cli.md](skills/functhis/references/cli.md
 
 ### Knowledge graph
 
-`fn index` incrementally parses your TypeScript repo (exports, imports, file structure) and merges in MCP tool metadata from connected upstreams. Search returns a **compact subgraph** (~6 KiB) with code excerpts — enough context for the agent without dumping the whole repo.
+`fn index` incrementally parses a **TypeScript** repo (needs `tsconfig.json`; other languages are not indexed) and merges MCP tool metadata from connected **stdio** upstreams. Search returns a **compact subgraph** (~6 KiB) with code excerpts. Without a tsconfig, indexing is skipped; the gateway still serves tools and packages.
 
 ### MCP gateway
 
-All upstream tools are reachable through Functhis. Discovery (`fn_search`, `fn_describe`), invocation (`fn_call`), and evidence access (`fn_select`, `fn_recall`) go through one gateway with recording, redaction, and compact result envelopes.
+All **imported stdio** upstream tools are reachable through Functhis. Discovery (`fn_search`, `fn_describe`), invocation (`fn_call`), and evidence access (`fn_select`, `fn_recall`) go through one gateway with recording, redaction, and compact result envelopes. HTTP/SSE servers stay in the client and are not proxied.
 
 ### Sandboxed code execution
 
@@ -205,10 +215,15 @@ Pointer envelope contract: [docs/MCP.md](docs/MCP.md)
 ## More docs
 
 - [INSTALL.md](INSTALL.md) — skill-only install (start here)
+- [CHANGELOG.md](CHANGELOG.md) — versions
 - [docs/MCP.md](docs/MCP.md) — pointer envelope contract and evidence read API
+- [docs/SETTINGS.md](docs/SETTINGS.md) — learning and trace retention
+- [docs/PACKAGES.md](docs/PACKAGES.md) — `functhis.json` / lock / lifecycle
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — gateway, sandbox, learning worker, graph
 - [docs/DEMO.md](docs/DEMO.md) — local demo flow and integration tests
-- [STATUS.md](STATUS.md) — what is done vs what to build (start here)
-- [roadmap.md](roadmap.md) — phases, what's left, and polish gaps
+- [examples/get-user-issues](examples/get-user-issues) — package layout example
+- [STATUS.md](STATUS.md) — what is done vs what to build
+- [roadmap.md](roadmap.md) — scope boundaries
 
 ## Development
 

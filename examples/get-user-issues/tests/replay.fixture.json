@@ -1,0 +1,24 @@
+{
+  "description": "Illustrative replay fixture for docs. Not captured from a live run.",
+  "calls": [
+    {
+      "toolId": "readonly.get_user",
+      "arguments": { "userId": "u1" },
+      "result": {
+        "name": "Ada Lovelace",
+        "role": "engineer",
+        "userId": "u1"
+      }
+    },
+    {
+      "toolId": "readonly.list_issues",
+      "arguments": { "owner": "openenvx", "repo": "functhis" },
+      "result": {
+        "issues": [{ "number": 42, "title": "Deployment failed on staging" }],
+        "owner": "openenvx",
+        "repo": "functhis",
+        "state": "open"
+      }
+    }
+  ]
+}

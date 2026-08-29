@@ -134,4 +134,21 @@ describe('graph store and indexer', () => {
 
     store.close();
   });
+
+  it('skips indexing when the repo has no tsconfig.json', async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'functhis-graph-nots-'));
+    configDir = join(tempDir, 'config');
+    repoRoot = join(tempDir, 'repo');
+    await mkdir(repoRoot, { recursive: true });
+
+    const store = new GraphStore(join(configDir, 'graph.sqlite'));
+    const report = indexRepository(store, {
+      include: ['src'],
+      root: repoRoot,
+    });
+
+    expect(report.filesIndexed).toBe(0);
+    expect(report.skippedReason).toMatch(/tsconfig\.json/);
+    store.close();
+  });
 });

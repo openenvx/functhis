@@ -6,6 +6,7 @@ import { describe, expect, test } from 'vitest';
 import { runImportAll, runImportFromSources } from '../src/cli/import';
 import {
   cursorServerToUpstream,
+  formatImportReport,
   importFromAllClients,
   importFromCursorFiles,
   importFromSources,
@@ -157,6 +158,9 @@ describe('client import', () => {
     expect(result.upstreams.find((u) => u.id === 'git-mcp')).toBeDefined();
     expect(result.skipped.some((s) => s.name === 'functhis')).toBe(true);
     expect(result.skipped.some((s) => s.name === 'remote-sentry')).toBe(true);
+    expect(formatImportReport(result)).toMatch(
+      /Warning: skipped \d+ HTTP\/SSE/
+    );
   });
 
   test('opencodeServerToUpstream converts local command arrays', () => {

@@ -35,7 +35,7 @@ export function registerGraphAndSandboxTools(
     'fn_index',
     {
       description:
-        'Incrementally index the local TypeScript repository into the knowledge graph.',
+        'Incrementally index the local TypeScript repository (requires tsconfig.json) into the knowledge graph.',
       inputSchema: z.object({
         force: z.boolean().optional().describe('Reindex all files'),
         include: z

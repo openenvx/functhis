@@ -27,6 +27,9 @@ export async function runIndex(
 }
 
 export function formatIndexReport(report: IndexReport): string {
+  if (report.skippedReason) {
+    return `Skipped repo index: ${report.skippedReason}`;
+  }
   return [
     `Indexed ${report.filesIndexed} file(s), skipped ${report.filesSkipped}, removed ${report.filesRemoved}`,
     `Symbols added: ${report.symbolsAdded}`,

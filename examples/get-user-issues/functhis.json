@@ -1,0 +1,31 @@
+{
+  "name": "get-user-issues",
+  "description": "Look up a user, then count fixture issues for openenvx/functhis.",
+  "entrypoint": "function.ts",
+  "autonomousOrigin": false,
+  "lifecycle": "active",
+  "capabilities": {
+    "tools": ["readonly.get_user", "readonly.list_issues"],
+    "writes": "deny"
+  },
+  "inputSchema": {
+    "type": "object",
+    "required": ["userId"],
+    "properties": {
+      "userId": { "type": "string" }
+    }
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "issueCount": { "type": "number" },
+      "userId": { "type": "string" }
+    }
+  },
+  "runtime": {
+    "execution": "sandbox",
+    "maxCalls": 20,
+    "maxOutputBytes": 6144,
+    "timeoutMs": 30000
+  }
+}

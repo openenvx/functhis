@@ -65,6 +65,8 @@ packages/auto-<flow>/
 ## Limits (current)
 
 - Direct MCP bypasses (client calls upstream without Functhis proxy) are not observed — must be explicitly marked
+- HTTP/SSE and remote MCP servers are skipped on import (stdio only); doctor warns, does not fail
+- Repo graph indexes TypeScript only (`tsconfig.json`); other languages are not parsed
 - `fn_learning_pause` is an emergency control, not part of normal workflow
 - Write autonomous promotion requires pre-configured scoped policy; otherwise flows quarantine automatically
 

@@ -36,7 +36,7 @@ program
 const importCmd = program
   .command('import')
   .description(
-    'Import stdio MCP servers from Cursor, Claude, OpenCode, and other client configs'
+    'Import stdio MCP servers from Cursor, Claude, OpenCode, and other client configs (HTTP/SSE servers are skipped)'
   )
   .option('--dir <path>', 'Functhis config directory')
   .option('--no-merge', 'Replace upstreams instead of merging by id')
@@ -170,7 +170,9 @@ program
 
 program
   .command('doctor')
-  .description('Validate config and test upstream MCP connections')
+  .description(
+    'Validate config, test stdio upstreams, and warn about HTTP/SSE servers left in the client'
+  )
   .option('--dir <path>', 'Config directory')
   .option('--packages-dir <path>', 'Packages directory (default: ./packages)')
   .action(async (options: { dir?: string; packagesDir?: string }) => {

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "local": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-everything"]
+    },
+    "remote": {
+      "url": "https://example.com/mcp"
+    }
+  }
+}

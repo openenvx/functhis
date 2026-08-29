@@ -6,11 +6,11 @@ These commands are for the Skill bootstrap sequence. **Users should not run them
 
 | Command | Purpose |
 | --- | --- |
-| `fn import [--dir PATH] [--dry-run]` | Import stdio servers from Cursor, Claude, OpenCode |
+| `fn import [--dir PATH] [--dry-run]` | Import stdio servers from Cursor, Claude, OpenCode (HTTP/SSE skipped with a warning) |
 | `fn import cursor` | Import Cursor only |
 | `fn import mcp-json <path>` | Import any `mcp.json`-style file |
 | `fn setup [--force] [--write-client cursor\|claude\|opencode]` | Demo fixtures or merge client MCP entry |
-| `fn doctor` | Validate config and upstream connections |
+| `fn doctor` | Validate config, test stdio upstreams, warn on leftover HTTP/SSE client servers |
 | `fn serve [--packages-dir PATH]` | Start stdio gateway (MCP client runs this) |
 | `fn traces list` | List recent captured traces |
 | `fn traces inspect <run-id>` | Inspect trace dataflow |

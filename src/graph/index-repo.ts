@@ -31,7 +31,14 @@ export function indexRepository(
   const root = resolve(options.root ?? process.cwd());
   const tsconfigPath = findTsconfig(root);
   if (!tsconfigPath) {
-    throw new Error(`No tsconfig.json found under ${root}`);
+    return {
+      durationMs: Date.now() - startMs,
+      filesIndexed: 0,
+      filesRemoved: 0,
+      filesSkipped: 0,
+      skippedReason: `No tsconfig.json under ${root}. The repo graph indexes TypeScript only; MCP tools are still available.`,
+      symbolsAdded: 0,
+    };
   }
 
   const project = new Project({

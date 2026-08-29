@@ -1,16 +1,34 @@
 # Local demo
 
-Functhis indexes your repo and upstream MCP tools into a SQLite graph, runs sandboxed TypeScript against allowlisted tools, and saves reusable packages under `packages/`.
+Functhis indexes TypeScript (when `tsconfig.json` exists) and upstream MCP tools into a SQLite graph, runs sandboxed TypeScript against allowlisted tools, and saves reusable packages under `packages/`.
 
 ## Skill-driven loop (recommended)
 
 Install the Functhis Skill or plugin. The agent:
 
-1. Auto-imports stdio servers from Cursor, Claude, and OpenCode (`fn import`)
-2. Writes the Functhis MCP entry and runs `fn doctor`
-3. Indexes the workspace (`fn index` or `fn_index`)
+1. Auto-imports **stdio** servers from Cursor, Claude, and OpenCode (`fn import`)
+2. Writes the Functhis MCP entry and runs `fn doctor` (HTTP/SSE skips show as warnings)
+3. Indexes TypeScript if `tsconfig.json` exists (`fn index` / `fn_index`)
 4. Uses `fn_search_context` / `fn_subgraph` for repo + tool context
-5. Runs one-off logic with `fn_execute_code` or compiles traces with `fn_compile_trace` / saves packages with `fn_save_function`
+5. Routes work through `fn_call`; repeated read-only flows become `packages/auto-*`
+
+## Worked example (fixture servers)
+
+Against the fake `readonly` MCP server in this repo:
+
+1. `fn setup` (or Skill bootstrap) so `readonly.get_user` and `readonly.list_issues` exist
+2. Ask the agent twice: “Look up user `u1` and list issues for openenvx/functhis”
+3. Both times the agent should `fn_search` / `fn_call` (or sandbox) **through the gateway**
+4. After the second success, `fn_candidates` / `fn_learning_status` shows a promoted `auto-*` package
+5. A third ask should hit that package from `fn_search` instead of replaying the two upstream tools
+
+Package shape (same tools, named example): [examples/get-user-issues](../examples/get-user-issues).
+
+Integration tests cover the compile loop without a live agent:
+
+```text
+fn_call (record trace) → fn_compile_trace → fn_test_function (replay) → fn_save_function → fn_call (package)
+```
 
 ## Quick local flow (CI / power users)
 
@@ -32,17 +50,11 @@ bun run e2e
 
 ## Compile a fixture trace
 
-Integration tests cover the full trace-to-function loop:
-
-```text
-fn_call (record trace) → fn_compile_trace → fn_test_function (replay) → fn_save_function → fn_call (package)
-```
-
-Run `bun run test` or `bun run e2e` to exercise this against fixture MCP servers (`fixtures/servers/readonly.ts`).
+Run `bun run test` or `bun run e2e` against fixture MCP servers (`fixtures/servers/readonly.ts`).
 
 ## Real MCP servers
 
-The Skill imports existing client configs automatically. To add servers manually, edit `.functhis/upstreams.json`. Use read-only tools first. Example:
+The Skill imports existing **stdio** client configs automatically. HTTP/SSE entries are skipped (warning on import/doctor). To add servers manually, edit `.functhis/upstreams.json`. Use read-only tools first. Example:
 
 ```json
 {

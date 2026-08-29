@@ -2,7 +2,7 @@
 
 Functhis exposes a stdio MCP server via `fn serve`. The **Skill** writes these entries automatically with `fn setup --write-client`.
 
-**User install (Skill only):** [INSTALL.md](../../../INSTALL.md)
+**User install (Skill only):** [INSTALL.md](https://github.com/openenvx/functhis/blob/main/INSTALL.md)
 
 ## Auto-import sources
 
@@ -14,7 +14,7 @@ Functhis exposes a stdio MCP server via `fn serve`. The **Skill** writes these e
 | Claude Code | `~/.claude/mcp.json`, `.mcp.json` |
 | OpenCode | `~/.config/opencode/opencode.json(c)`, `opencode.json(c)`, `.opencode/opencode.json(c)` |
 
-HTTP/remote servers and the Functhis gateway entry itself are skipped.
+HTTP/remote servers and the Functhis gateway entry itself are skipped. Import and `fn doctor` print a warning when HTTP/SSE servers remain in the client.
 
 ## Write Functhis into a client (Skill bootstrap)
 
@@ -75,4 +75,6 @@ codex plugin add functhis@functhis
 
 **Cursor**
 
-Import the marketplace from the repository URL, then install the `functhis` plugin.
+1. Settings → Plugins.
+2. Add marketplace from GitHub: `https://github.com/openenvx/functhis`.
+3. Install the `functhis` plugin.

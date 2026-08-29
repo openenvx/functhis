@@ -1,6 +1,6 @@
 {
   "name": "functhis",
-  "version": "0.2.0",
+  "version": "0.1.0",
   "private": false,
   "description": "Local MCP gateway with repo knowledge graph, sandboxed TypeScript, and shareable packages.",
   "homepage": "https://github.com/openenvx/functhis#readme",
@@ -19,8 +19,11 @@
   "files": [
     "dist",
     "skills",
+    "docs",
+    "examples",
     "README.md",
     "INSTALL.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "type": "module",
@@ -35,8 +38,10 @@
     "fix": "ultracite fix",
     "knip": "knip",
     "lint": "ultracite check",
+    "prepack": "tsc",
     "prepublishOnly": "bun run check-types && bun run build",
-    "prepare": "bun x husky || true"
+    "prepare": "bun x husky || true",
+    "sync-plugin-skills": "bash scripts/sync-plugin-skills.sh"
   },
   "dependencies": {
     "@modelcontextprotocol/client": "^2.0.0",

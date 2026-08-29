@@ -10,7 +10,7 @@
         "source": "local",
         "path": "./plugins/functhis"
       },
-      "description": "Local MCP gateway, sandbox TypeScript, and function package skills. Install CLI: npm install -g functhis",
+      "description": "Local MCP gateway that auto-saves repeated tool flows as TypeScript packages. CLI: npm install -g functhis",
       "default": true,
       "policy": {
         "installation": "AVAILABLE",
